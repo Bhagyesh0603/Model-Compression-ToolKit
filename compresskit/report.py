@@ -284,10 +284,10 @@ def render(result, path: str | Path, sensitivity=None, title: str = "Compression
         )
     if result.prune_stats and result.prune_stats.get("channels"):
         extra_sections += (
-            "<h2>Channels per layer</h2><extra_sectionss><summary>show all layers</summary>"
+            "<h2>Channels per layer</h2><details><summary>show all layers</summary>"
             "<table><thead><tr><th>layer</th><th class='num'>before</th><th class='num'>after</th>"
             "<th class='num'>removed</th></tr></thead>"
-            f"<tbody>{_channel_rows(result.prune_stats['channels'])}</tbody></table></extra_sectionss>"
+            f"<tbody>{_channel_rows(result.prune_stats['channels'])}</tbody></table></details>"
         )
     if training_history:
         extra_sections += (

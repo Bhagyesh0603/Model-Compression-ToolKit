@@ -39,6 +39,13 @@ def write(name: str, payload: dict) -> None:
     print(f"  wrote {path.relative_to(ROOT)}  ({path.stat().st_size / 1024:.1f} KB)")
 
 
+def file_date(path: Path) -> str:
+    """When a local run wrote its results, which is the run's date (not the date of this export)."""
+    from datetime import datetime
+
+    return datetime.fromtimestamp(path.stat().st_mtime).date().isoformat()
+
+
 def provenance(kind: str, **extra) -> dict:
     from compresskit.core.host import probe
 
@@ -103,31 +110,105 @@ def copy_downloads(workdir: Path, slug: str) -> list[dict]:
     return files
 
 
+def run_summary(record: dict, *, run_id: str, machine: str, primary: bool) -> dict:
+    """One test run of a model, condensed to what the "all test runs" comparison shows."""
+    b, f = record["baseline"], record["stages"][-1]
+    ps = record.get("prune_stats") or {}
+    return {
+        "id": run_id, "machine": machine, "primary": primary,
+        "kind": record["provenance"]["kind"], "where": record["provenance"]["where"],
+        "date": record["provenance"].get("date"), "source": record["source"], "schedule": record["schedule"],
+        "cpu": record["host"].get("cpu"), "int8_speed": record["host"].get("int8_speed"),
+        "steps": len(record.get("prune_history") or []) or None,
+        "params_before": ps.get("params_before", b["parameters"]), "params_after": ps.get("params_after", f["parameters"]),
+        "baseline": {k: b[k] for k in ("accuracy", "median_ms", "size_mb", "parameters")},
+        "final": {k: f[k] for k in ("accuracy", "median_ms", "size_mb", "parameters", "precision")},
+        "totals": record["totals"],
+    }
+
+
+def imported(name: str) -> dict | None:
+    """A run recovered by tools/import_runs.py from an HTML report or a notebook log."""
+    path = ROOT / "artifacts" / "imported" / f"{name}.json"
+    return json.loads(path.read_text()) if path.exists() else None
+
+
+INTEL_I5 = "Intel Core i5 laptop"
+APPLE_M5 = "Apple M5 Mac"
+KAGGLE = "Kaggle cloud CPU"
+
+
 def export_models(args) -> None:
     entries = []
+
+    # ---- ResNet-20: the Apple M5 demo run stays the headline (the landing story, the downloads and the
+    # ONNX-vs-original check are all from it); the Intel laptop run is listed beside it.
     demo = ROOT / "artifacts" / "demo" / "results.json"
     if demo.exists():
-        entries.append(condense(
+        r20 = condense(
             json.loads(demo.read_text()), name="ResNet-20", arch="resnet20", dataset="CIFAR-10",
             schedule="prune 0.5 channels, 3 steps x 2 DKD fine-tune epochs, INT8",
             source=str(demo.relative_to(ROOT)),
-            prov=provenance("measured", where="local run", note="Apple M5, fast INT8"),
-        ))
-        entries[-1]["downloads"] = copy_downloads(demo.parent, "resnet20")
-    smoke = ROOT / "artifacts" / "r56smoke" / "results.json"
+            prov=provenance("measured", where="local run", note="Apple M5, fast INT8", date=file_date(demo)),
+        )
+        r20["downloads"] = copy_downloads(demo.parent, "resnet20")
+        runs = [run_summary(r20, run_id="m5", machine=APPLE_M5, primary=True)]
+        if (rec := imported("resnet20_intel_i5")) is not None:
+            other = condense(
+                rec, name="ResNet-20", arch="resnet20", dataset="CIFAR-10",
+                schedule="5 gradual pruning steps, then INT8; half the channels cut in the early layers, a quarter in the last stage",
+                source="resnet20_report.html",
+                prov={"kind": "measured", "host": rec["host"]["cpu"], "machine": rec["host"]["machine"],
+                      "date": rec["_source"]["generated"], "where": "compresskit HTML report",
+                      "note": "fast INT8 (AVX-512 VNNI); fine-tune length is not printed in the report"},
+            )
+            runs.append(run_summary(other, run_id="intel-i5", machine=INTEL_I5, primary=False))
+        r20["runs"] = runs
+        entries.append(r20)
+
+    # ---- ResNet-56: the full Intel laptop run is the headline once imported; the 2-step smoke run is only
+    # a pipeline check and is kept in the list of runs, never as the headline.
+    smoke_path = ROOT / "artifacts" / "r56smoke" / "results.json"
+    smoke = condense(
+        json.loads(smoke_path.read_text()), name="ResNet-56", arch="resnet56", dataset="CIFAR-10",
+        schedule="prune 0.5 channels, 2 steps x 1 DKD fine-tune epoch, INT8 (short smoke run, not the full schedule)",
+        source=str(smoke_path.relative_to(ROOT)),
+        prov=provenance("measured", where="local run", note="short schedule; a pipeline check, not a result",
+                        date=file_date(smoke_path)),
+    ) if smoke_path.exists() else None
+    r56_runs: list[tuple[dict, str, str]] = []
     if args.resnet56_json:
-        entries.append(condense(
+        r56_runs.append((condense(
             json.loads(Path(args.resnet56_json).read_text()), name="ResNet-56", arch="resnet56",
             dataset="CIFAR-10", schedule=args.resnet56_schedule, source=Path(args.resnet56_json).name,
             prov=provenance("measured", where="results.json supplied with --resnet56-json"),
-        ))
-    elif smoke.exists():
-        entries.append(condense(
-            json.loads(smoke.read_text()), name="ResNet-56", arch="resnet56", dataset="CIFAR-10",
-            schedule="prune 0.5 channels, 2 steps x 1 DKD fine-tune epoch, INT8 (short smoke run, not the full schedule)",
-            source=str(smoke.relative_to(ROOT)),
-            prov=provenance("measured", where="local run", note="short schedule; superseded by the full Kaggle run when supplied"),
-        ))
+        ), "supplied", "supplied run"))
+    if (rec := imported("resnet56_intel_i5")) is not None:
+        r56_runs.append((condense(
+            rec, name="ResNet-56", arch="resnet56", dataset="CIFAR-10",
+            schedule="5 gradual pruning steps, then INT8; half the channels cut in the early layers, a quarter in the last stage",
+            source="resnet56_report.html",
+            prov={"kind": "measured", "host": rec["host"]["cpu"], "machine": rec["host"]["machine"],
+                  "date": rec["_source"]["generated"], "where": "compresskit HTML report",
+                  "note": "fast INT8 (AVX-512 VNNI); fine-tune length is not printed in the report"},
+        ), "intel-i5", INTEL_I5))
+    if (rec := imported("resnet56_kaggle")) is not None:
+        r56_runs.append((condense(
+            rec, name="ResNet-56", arch="resnet56", dataset="CIFAR-10",
+            schedule="prune 0.5 channels, 5 steps x 5 DKD fine-tune epochs, INT8",
+            source="resnet56-compression.ipynb",
+            prov={"kind": "measured", "host": f"Kaggle ({rec['host']['cpu']})", "machine": rec["host"]["machine"],
+                  "where": "Kaggle notebook output, read by tools/import_runs.py",
+                  "note": "no fast INT8 on this CPU, so its latency is not a deployment figure"},
+        ), "kaggle", KAGGLE))
+    if smoke is not None:
+        r56_runs.append((smoke, "m5-smoke", f"{APPLE_M5} (short test)"))
+    if r56_runs:
+        head = r56_runs[0][0]
+        head["runs"] = [run_summary(rec, run_id=rid, machine=machine, primary=i == 0)
+                        for i, (rec, rid, machine) in enumerate(r56_runs)]
+        entries.append(head)
+
     if args.vgg_json:
         entries.append(condense(
             json.loads(Path(args.vgg_json).read_text()), name="VGG-16-BN", arch="vgg16_bn", dataset="CIFAR-10",
@@ -144,7 +225,23 @@ def export_models(args) -> None:
             prov={"kind": "transcribed", "host": "Kaggle (Intel Xeon @ 2.00GHz)", "where": "Kaggle notebook log",
                   "note": "typed in from the run's printed log; latency is Kaggle-CPU latency, not an INT8-capable device"},
         ))
-    write("models", {"models": entries})
+    if entries and entries[-1]["arch"] == "vgg16_bn":
+        entries[-1]["runs"] = [run_summary(entries[-1], run_id="kaggle", machine=KAGGLE, primary=True)]
+
+    for e in entries:
+        support = e["baseline"].get("support")
+        # Only when the run recorded per-class support; the VGG-16 run used an unrecorded subset of the test split.
+        e["test_images"] = sum(support) if support else None
+    write("models", {
+        "models": entries,
+        # Notebooks that exist in kaggle/ but have no recorded run yet. Listed so the site can say so plainly.
+        "untested": [
+            {"name": "ResNet-152", "dataset": "CIFAR-10", "notebook": "kaggle/new/resnet152_cifar10_compression.ipynb"},
+            {"name": "DenseNet-121", "dataset": "CIFAR-10", "notebook": "kaggle/new/densenet121_cifar10_compression.ipynb"},
+            {"name": "ConvNeXt-Tiny", "dataset": "CIFAR-10", "notebook": "kaggle/new/convnext_tiny_cifar10_compression.ipynb"},
+            {"name": "VGG-16", "dataset": "ImageNet", "notebook": "kaggle/vgg16_imagenet_compression.ipynb"},
+        ],
+    })
 
 
 # --------------------------------------------------------------------------- notebooks

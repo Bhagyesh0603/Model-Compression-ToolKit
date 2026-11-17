@@ -15,6 +15,7 @@ const ROUTES = [
   '/techniques/benchmarking',
   '/models',
   '/models/resnet20',
+  '/models/resnet56',
   '/models/vgg16-bn',
   '/notebooks',
   '/notebooks/compresskit-end-to-end',

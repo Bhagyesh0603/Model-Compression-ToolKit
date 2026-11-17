@@ -58,7 +58,7 @@ function Card({ model }: { model: ModelRecord }) {
         </div>
         <div className="space-y-2">
           <AnimBar label="Accuracy, before" value={b.accuracy} display={pct(b.accuracy)} />
-          <AnimBar label={`Accuracy, after (${model.totals.accuracy_drop_pp.toFixed(2)} pp lower)`} value={f.accuracy} display={pct(f.accuracy)} accent />
+          <AnimBar label={`Accuracy, after (${model.totals.accuracy_drop_pp.toFixed(2)} points lower)`} value={f.accuracy} display={pct(f.accuracy)} accent />
         </div>
       </div>
       <p className="mt-auto pt-6 text-[12px] leading-snug text-(--muted)">

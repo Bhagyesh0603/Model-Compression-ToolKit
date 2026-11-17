@@ -10,7 +10,7 @@
     "kind": "measured",
     "host": "Apple M5",
     "machine": "arm64",
-    "date": "2026-10-27",
+    "date": "2026-10-26",
     "where": "local run",
     "note": "Apple M5, fast INT8"
    },
@@ -330,50 +330,121 @@
      "href": "/models/resnet20-int8.onnx",
      "size_bytes": 120363
     }
-   ]
+   ],
+   "runs": [
+    {
+     "id": "m5",
+     "machine": "Apple M5 Mac",
+     "primary": true,
+     "kind": "measured",
+     "where": "local run",
+     "date": "2026-10-26",
+     "source": "artifacts/demo/results.json",
+     "schedule": "prune 0.5 channels, 3 steps x 2 DKD fine-tune epochs, INT8",
+     "cpu": "Apple M5",
+     "int8_speed": "fast",
+     "steps": 3,
+     "params_before": 272474,
+     "params_after": 68786,
+     "baseline": {
+      "accuracy": 0.9154,
+      "median_ms": 1.4521664998028427,
+      "size_mb": 1.045663833618164,
+      "parameters": 272474
+     },
+     "final": {
+      "accuracy": 0.84,
+      "median_ms": 0.45991600018169265,
+      "size_mb": 0.11478710174560547,
+      "parameters": 68786,
+      "precision": "int8"
+     },
+     "totals": {
+      "accuracy_drop_pp": 7.540000000000003,
+      "speedup": 3.157460273678575,
+      "size_reduction": 9.109593479723836,
+      "efficiency_score": 0.8125075580356472,
+      "compression_score": 0.7867576888675525
+     }
+    },
+    {
+     "id": "intel-i5",
+     "machine": "Intel Core i5 laptop",
+     "primary": false,
+     "kind": "measured",
+     "where": "compresskit HTML report",
+     "date": "2026-10-27",
+     "source": "resnet20_report.html",
+     "schedule": "5 gradual pruning steps, then INT8; half the channels cut in the early layers, a quarter in the last stage",
+     "cpu": "11th Gen Intel(R) Core(TM) i5-11320H @ 3.20GHz",
+     "int8_speed": "fast",
+     "steps": 5,
+     "params_before": 272474,
+     "params_after": 129330,
+     "baseline": {
+      "accuracy": 0.9154,
+      "median_ms": 0.612,
+      "size_mb": 1.05,
+      "parameters": 272474
+     },
+     "final": {
+      "accuracy": 0.8711,
+      "median_ms": 0.313,
+      "size_mb": 0.17,
+      "parameters": 129330,
+      "precision": "int8"
+     },
+     "totals": {
+      "accuracy_drop_pp": 4.43,
+      "speedup": 1.95,
+      "size_reduction": 6.01,
+      "efficiency_score": 0.7517
+     }
+    }
+   ],
+   "test_images": 10000
   },
   {
    "name": "ResNet-56",
    "arch": "resnet56",
    "dataset": "CIFAR-10",
-   "schedule": "prune 0.5 channels, 2 steps x 1 DKD fine-tune epoch, INT8 (short smoke run, not the full schedule)",
-   "source": "artifacts/r56smoke/results.json",
+   "schedule": "5 gradual pruning steps, then INT8; half the channels cut in the early layers, a quarter in the last stage",
+   "source": "resnet56_report.html",
    "provenance": {
     "kind": "measured",
-    "host": "Apple M5",
-    "machine": "arm64",
+    "host": "11th Gen Intel(R) Core(TM) i5-11320H @ 3.20GHz",
+    "machine": "x86_64",
     "date": "2026-10-27",
-    "where": "local run",
-    "note": "short schedule; superseded by the full Kaggle run when supplied"
+    "where": "compresskit HTML report",
+    "note": "fast INT8 (AVX-512 VNNI); fine-tune length is not printed in the report"
    },
    "host": {
-    "system": "Darwin",
-    "machine": "arm64",
-    "cpu": "Apple M5",
-    "logical_cores": 10,
-    "performance_cores": 4,
+    "system": null,
+    "machine": "x86_64",
+    "cpu": "11th Gen Intel(R) Core(TM) i5-11320H @ 3.20GHz",
+    "logical_cores": 8,
+    "performance_cores": 8,
     "features": [
-     "bf16",
-     "dotprod",
-     "fp16",
-     "i8mm",
-     "neon"
+     "avx2",
+     "avx512_vnni",
+     "avx512f",
+     "f16c"
     ],
     "int8_speed": "fast",
     "versions": {
-     "python": "3.14.7",
-     "torch": "2.14.0",
-     "onnxruntime": "1.29.0",
-     "numpy": "2.5.2"
+     "python": "3.14.8",
+     "torch": "2.14.1+cu130",
+     "onnxruntime": "1.31.1",
+     "numpy": "2.5.4"
     }
    },
    "baseline": {
     "stage": "baseline",
     "precision": "fp32",
     "accuracy": 0.9318,
-    "median_ms": 2.7293960010865703,
-    "p95_ms": 2.799875001073815,
-    "size_mb": 3.281416893005371,
+    "median_ms": 1.892,
+    "p95_ms": 1.925,
+    "size_mb": 3.28,
     "parameters": 855770,
     "notes": "",
     "recall": [
@@ -406,93 +477,49 @@
     {
      "stage": "1_prune",
      "precision": "fp32",
-     "accuracy": 0.8173,
-     "median_ms": 0.936333501158515,
-     "p95_ms": 1.0315410036128014,
-     "size_mb": 0.8421363830566406,
-     "parameters": 215282,
-     "notes": "params 855,770 -> 215,282 (74.8% removed)  MACs 126.8M -> 32.1M (74.7% removed)\n! SIMD alignment tightened per layer instead of relaxed for everyone: {'conv1': 8, 'layer1.0.conv1': 8, 'layer1.0.conv2': 8, 'layer1.1.conv1': 8, 'layer1.1.conv2': 8, 'layer1.2.conv1': 8, 'layer1.2.conv2': 8, 'layer1.3.conv1': 8, 'layer1.3.conv2': 8, 'layer1.4.conv1': 8, 'layer1.4.conv2': 8, 'layer1.5.conv1': 8, 'layer1.5.conv2': 8, 'layer1.6.conv1': 8, 'layer1.6.conv2': 8, 'layer1.7.conv1': 8, 'layer1.7.conv2': 8, 'layer1.8.conv1': 8, 'layer1.8.conv2': 8} use a smaller alignment than the requested 16 because their own width can't fit two aligned blocks at that ratio \u2014 every other layer keeps the full 16-alignment | 2 steps x 1 ft epochs",
-     "recall": [
-      0.863,
-      0.901,
-      0.676,
-      0.746,
-      0.828,
-      0.719,
-      0.844,
-      0.843,
-      0.878,
-      0.875
-     ],
-     "support": [
-      1000,
-      1000,
-      1000,
-      1000,
-      1000,
-      1000,
-      1000,
-      1000,
-      1000,
-      1000
-     ],
+     "accuracy": 0.9042,
+     "median_ms": 1.074,
+     "p95_ms": 1.103,
+     "size_mb": 1.6,
+     "parameters": 414450,
+     "notes": "",
+     "recall": null,
+     "support": null,
      "artifact": "1_prune.onnx"
     },
     {
      "stage": "2_recover",
      "precision": "fp32",
-     "accuracy": 0.8173,
-     "median_ms": 1.0267494981235359,
-     "p95_ms": 1.1520830012159422,
-     "size_mb": 0.8421363830566406,
-     "parameters": 215282,
-     "notes": "BN statistics re-estimated",
-     "recall": [
-      0.863,
-      0.901,
-      0.676,
-      0.746,
-      0.828,
-      0.719,
-      0.844,
-      0.843,
-      0.878,
-      0.875
-     ],
-     "support": [
-      1000,
-      1000,
-      1000,
-      1000,
-      1000,
-      1000,
-      1000,
-      1000,
-      1000,
-      1000
-     ],
+     "accuracy": 0.9042,
+     "median_ms": 1.076,
+     "p95_ms": 1.1,
+     "size_mb": 1.6,
+     "parameters": 414450,
+     "notes": "",
+     "recall": null,
+     "support": null,
      "artifact": "2_recover.onnx"
     },
     {
      "stage": "3_quantize",
      "precision": "int8",
-     "accuracy": 0.8191,
-     "median_ms": 0.6642705011472572,
-     "p95_ms": 0.706582999555394,
-     "size_mb": 0.3353290557861328,
-     "parameters": 215282,
-     "notes": "precision auto-selected: int8 \u2014 INT8 has fused kernels here (i8mm, dotprod) \u2014 expect a real latency win.",
+     "accuracy": 0.905,
+     "median_ms": 0.842,
+     "p95_ms": 0.858,
+     "size_mb": 0.53,
+     "parameters": 414450,
+     "notes": "",
      "recall": [
-      0.863,
+      0.929,
+      0.96,
+      0.855,
+      0.831,
       0.904,
-      0.692,
-      0.752,
-      0.828,
-      0.712,
-      0.844,
-      0.841,
-      0.879,
-      0.876
+      0.838,
+      0.931,
+      0.934,
+      0.936,
+      0.932
      ],
      "support": [
       1000,
@@ -511,13 +538,11 @@
    ],
    "prune_stats": {
     "params_before": 855770,
-    "params_after": 215282,
-    "macs_before": 126841482.0,
-    "macs_after": 32094538.0,
-    "ratio_requested": 0.5,
-    "align": 16,
-    "align_effective": 8,
-    "steps": 2,
+    "params_after": 414450,
+    "macs_before": null,
+    "macs_after": null,
+    "ratio_requested": null,
+    "steps": 5,
     "channels": {
      "conv1": [
       16,
@@ -673,122 +698,238 @@
      ],
      "layer3.0.conv1": [
       64,
-      32
+      48
      ],
      "layer3.0.conv2": [
       64,
-      32
+      48
      ],
      "layer3.0.downsample.0": [
       64,
-      32
+      48
      ],
      "layer3.1.conv1": [
       64,
-      32
+      48
      ],
      "layer3.1.conv2": [
       64,
-      32
+      48
      ],
      "layer3.2.conv1": [
       64,
-      32
+      48
      ],
      "layer3.2.conv2": [
       64,
-      32
+      48
      ],
      "layer3.3.conv1": [
       64,
-      32
+      48
      ],
      "layer3.3.conv2": [
       64,
-      32
+      48
      ],
      "layer3.4.conv1": [
       64,
-      32
+      48
      ],
      "layer3.4.conv2": [
       64,
-      32
+      48
      ],
      "layer3.5.conv1": [
       64,
-      32
+      48
      ],
      "layer3.5.conv2": [
       64,
-      32
+      48
      ],
      "layer3.6.conv1": [
       64,
-      32
+      48
      ],
      "layer3.6.conv2": [
       64,
-      32
+      48
      ],
      "layer3.7.conv1": [
       64,
-      32
+      48
      ],
      "layer3.7.conv2": [
       64,
-      32
+      48
      ],
      "layer3.8.conv1": [
       64,
-      32
+      48
      ],
      "layer3.8.conv2": [
       64,
-      32
+      48
      ],
      "fc": [
       10,
       10
      ]
-    },
-    "warnings": [
-     "SIMD alignment tightened per layer instead of relaxed for everyone: {'conv1': 8, 'layer1.0.conv1': 8, 'layer1.0.conv2': 8, 'layer1.1.conv1': 8, 'layer1.1.conv2': 8, 'layer1.2.conv1': 8, 'layer1.2.conv2': 8, 'layer1.3.conv1': 8, 'layer1.3.conv2': 8, 'layer1.4.conv1': 8, 'layer1.4.conv2': 8, 'layer1.5.conv1': 8, 'layer1.5.conv2': 8, 'layer1.6.conv1': 8, 'layer1.6.conv2': 8, 'layer1.7.conv1': 8, 'layer1.7.conv2': 8, 'layer1.8.conv1': 8, 'layer1.8.conv2': 8} use a smaller alignment than the requested 16 because their own width can't fit two aligned blocks at that ratio \u2014 every other layer keeps the full 16-alignment"
-    ]
+    }
    },
    "prune_history": [
     {
      "step": 1,
-     "params": 482374,
-     "acc_after_cut": 0.6342,
-     "acc_after_finetune": 0.8685
+     "params": 728088,
+     "acc_after_cut": 0.8542,
+     "acc_after_finetune": 0.8959
     },
     {
      "step": 2,
-     "params": 215282,
-     "acc_after_cut": 0.4635,
-     "acc_after_finetune": 0.8173
+     "params": 637776,
+     "acc_after_cut": 0.8549,
+     "acc_after_finetune": 0.8936
+    },
+    {
+     "step": 3,
+     "params": 558255,
+     "acc_after_cut": 0.8554,
+     "acc_after_finetune": 0.8933
+    },
+    {
+     "step": 4,
+     "params": 481473,
+     "acc_after_cut": 0.8139,
+     "acc_after_finetune": 0.8892
+    },
+    {
+     "step": 5,
+     "params": 414450,
+     "acc_after_cut": 0.8277,
+     "acc_after_finetune": 0.9042
     }
    ],
    "quantization": {
     "precision": "int8",
     "coverage": 1.0,
-    "quantized_ops": {
-     "Conv": 57,
-     "Gemm": 1
-    },
-    "unquantized_ops": {}
+    "quantized_ops": {}
    },
    "totals": {
-    "accuracy_drop_pp": 11.26999999999999,
-    "speedup": 4.108862272782923,
-    "size_reduction": 9.785662281225648,
-    "efficiency_score": 0.8231383172410943,
-    "compression_score": 0.8272166511005248
+    "accuracy_drop_pp": 2.68,
+    "speedup": 2.25,
+    "size_reduction": 6.2,
+    "efficiency_score": 0.7874
    },
    "warnings": [
-    "precision auto-selected: int8 \u2014 INT8 has fused kernels here (i8mm, dotprod) \u2014 expect a real latency win."
-   ]
+    "precision auto-selected: int8 \u2014 INT8 has fused kernels here (avx512_vnni) \u2014 expect a real latency win."
+   ],
+   "runs": [
+    {
+     "id": "intel-i5",
+     "machine": "Intel Core i5 laptop",
+     "primary": true,
+     "kind": "measured",
+     "where": "compresskit HTML report",
+     "date": "2026-10-27",
+     "source": "resnet56_report.html",
+     "schedule": "5 gradual pruning steps, then INT8; half the channels cut in the early layers, a quarter in the last stage",
+     "cpu": "11th Gen Intel(R) Core(TM) i5-11320H @ 3.20GHz",
+     "int8_speed": "fast",
+     "steps": 5,
+     "params_before": 855770,
+     "params_after": 414450,
+     "baseline": {
+      "accuracy": 0.9318,
+      "median_ms": 1.892,
+      "size_mb": 3.28,
+      "parameters": 855770
+     },
+     "final": {
+      "accuracy": 0.905,
+      "median_ms": 0.842,
+      "size_mb": 0.53,
+      "parameters": 414450,
+      "precision": "int8"
+     },
+     "totals": {
+      "accuracy_drop_pp": 2.68,
+      "speedup": 2.25,
+      "size_reduction": 6.2,
+      "efficiency_score": 0.7874
+     }
+    },
+    {
+     "id": "kaggle",
+     "machine": "Kaggle cloud CPU",
+     "primary": false,
+     "kind": "measured",
+     "where": "Kaggle notebook output, read by tools/import_runs.py",
+     "date": null,
+     "source": "resnet56-compression.ipynb",
+     "schedule": "prune 0.5 channels, 5 steps x 5 DKD fine-tune epochs, INT8",
+     "cpu": "Intel(R) Xeon(R) CPU @ 2.20GHz",
+     "int8_speed": "slow",
+     "steps": 5,
+     "params_before": 855770,
+     "params_after": 215282,
+     "baseline": {
+      "accuracy": 0.9318,
+      "median_ms": 4.655,
+      "size_mb": 3.28,
+      "parameters": 855770
+     },
+     "final": {
+      "accuracy": 0.8928,
+      "median_ms": 2.03,
+      "size_mb": 0.33,
+      "parameters": 215282,
+      "precision": "int8"
+     },
+     "totals": {
+      "accuracy_drop_pp": 3.9,
+      "speedup": 2.29,
+      "size_reduction": 9.81,
+      "efficiency_score": 0.8038
+     }
+    },
+    {
+     "id": "m5-smoke",
+     "machine": "Apple M5 Mac (short test)",
+     "primary": false,
+     "kind": "measured",
+     "where": "local run",
+     "date": "2026-10-27",
+     "source": "artifacts/r56smoke/results.json",
+     "schedule": "prune 0.5 channels, 2 steps x 1 DKD fine-tune epoch, INT8 (short smoke run, not the full schedule)",
+     "cpu": "Apple M5",
+     "int8_speed": "fast",
+     "steps": 2,
+     "params_before": 855770,
+     "params_after": 215282,
+     "baseline": {
+      "accuracy": 0.9318,
+      "median_ms": 2.7293960010865703,
+      "size_mb": 3.281416893005371,
+      "parameters": 855770
+     },
+     "final": {
+      "accuracy": 0.8191,
+      "median_ms": 0.6642705011472572,
+      "size_mb": 0.3353290557861328,
+      "parameters": 215282,
+      "precision": "int8"
+     },
+     "totals": {
+      "accuracy_drop_pp": 11.26999999999999,
+      "speedup": 4.108862272782923,
+      "size_reduction": 9.785662281225648,
+      "efficiency_score": 0.8231383172410943,
+      "compression_score": 0.8272166511005248
+     }
+    }
+   ],
+   "test_images": 10000
   },
   {
    "name": "VGG-16-BN",
@@ -932,7 +1073,66 @@
    },
    "warnings": [
     "INT8 requested but No VNNI/AMX/DotProd/I8MM on this CPU - INT8 may be SLOWER than FP32. Benchmark before shipping it."
-   ]
+   ],
+   "runs": [
+    {
+     "id": "kaggle",
+     "machine": "Kaggle cloud CPU",
+     "primary": true,
+     "kind": "transcribed",
+     "where": "Kaggle notebook log",
+     "date": null,
+     "source": "tools/transcribed_vgg16.json",
+     "schedule": "prune 0.5 channels, 5 steps x 5 DKD fine-tune epochs, INT8",
+     "cpu": "Intel(R) Xeon(R) CPU @ 2.00GHz",
+     "int8_speed": "slow",
+     "steps": 5,
+     "params_before": 14724042,
+     "params_after": 3684842,
+     "baseline": {
+      "accuracy": 0.932,
+      "median_ms": 9.042,
+      "size_mb": 56.16,
+      "parameters": 14724042
+     },
+     "final": {
+      "accuracy": 0.9018,
+      "median_ms": 1.133,
+      "size_mb": 3.57,
+      "parameters": 3684842,
+      "precision": "int8"
+     },
+     "totals": {
+      "accuracy_drop_pp": 3.02,
+      "speedup": 7.98,
+      "size_reduction": 15.72,
+      "efficiency_score": 0.9037
+     }
+    }
+   ],
+   "test_images": null
+  }
+ ],
+ "untested": [
+  {
+   "name": "ResNet-152",
+   "dataset": "CIFAR-10",
+   "notebook": "kaggle/new/resnet152_cifar10_compression.ipynb"
+  },
+  {
+   "name": "DenseNet-121",
+   "dataset": "CIFAR-10",
+   "notebook": "kaggle/new/densenet121_cifar10_compression.ipynb"
+  },
+  {
+   "name": "ConvNeXt-Tiny",
+   "dataset": "CIFAR-10",
+   "notebook": "kaggle/new/convnext_tiny_cifar10_compression.ipynb"
+  },
+  {
+   "name": "VGG-16",
+   "dataset": "ImageNet",
+   "notebook": "kaggle/vgg16_imagenet_compression.ipynb"
   }
  ]
 }

@@ -61,8 +61,8 @@ export interface ModelRecord {
   prune_stats: {
     params_before: number;
     params_after: number;
-    macs_before: number;
-    macs_after: number;
+    macs_before: number | null;
+    macs_after: number | null;
     ratio_requested: number;
     steps: number;
     channels: Record<string, [number, number]>;
@@ -72,9 +72,43 @@ export interface ModelRecord {
   totals: { accuracy_drop_pp: number; speedup: number; size_reduction: number; efficiency_score: number };
   warnings: string[];
   downloads?: { label: string; href: string; size_bytes: number }[];
+  /** Every recorded test run of this model, the headline run first (`primary`). */
+  runs: RunSummary[];
+  /** Test images behind the accuracy figure, when the run recorded per-class counts. */
+  test_images: number | null;
+}
+
+/** One test run of a model: where it ran, how hard it was compressed, what came out. */
+export interface RunSummary {
+  id: string;
+  machine: string;
+  primary: boolean;
+  kind: ProvenanceKind;
+  where: string;
+  date?: string | null;
+  source: string;
+  schedule: string;
+  cpu: string | null;
+  int8_speed: string | null;
+  steps: number | null;
+  params_before: number;
+  params_after: number;
+  baseline: { accuracy: number; median_ms: number; size_mb: number; parameters: number };
+  final: { accuracy: number; median_ms: number; size_mb: number; parameters: number; precision: string };
+  totals: ModelRecord['totals'];
+}
+
+/** A model with a notebook in the repo but no recorded run yet. */
+export interface UntestedModel {
+  name: string;
+  dataset: string;
+  notebook: string;
 }
 
 export const models = modelsJson.models as unknown as ModelRecord[];
+export const untested = (modelsJson as unknown as { untested?: UntestedModel[] }).untested ?? [];
+/** Recorded test runs across all models. */
+export const runCount = models.reduce((n, m) => n + m.runs.length, 0);
 export const hosts = hostsJson.hosts;
 export const sensitivity = sensitivityJson;
 export const quantWeights = quantJson;

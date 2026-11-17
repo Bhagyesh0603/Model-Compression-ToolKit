@@ -127,16 +127,16 @@ export function StageExplorer({ fixedArch }: { fixedArch?: string } = {}) {
         )}
 
         <dl className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-2xl bg-(--line) sm:grid-cols-4">
-          <Gauge label="Accuracy" note={stage ? `${((b.accuracy - row.accuracy) * 100).toFixed(2)} pp vs baseline` : 'baseline'}>
+          <Gauge label="Accuracy" note={stage ? `${((b.accuracy - row.accuracy) * 100).toFixed(2)} points below the original` : 'original'}>
             <MotionNumber value={acc} format={fmtPct} initial={row.accuracy} />
           </Gauge>
-          <Gauge label="Size" note={stage ? `${ratio(b.size_mb / row.size_mb)} smaller` : 'baseline'}>
+          <Gauge label="Size" note={stage ? `${ratio(b.size_mb / row.size_mb)} smaller` : 'original'}>
             <MotionNumber value={size} format={fmtMb} initial={row.size_mb} />
           </Gauge>
-          <Gauge label="Median latency" note={stage ? `${ratio(b.median_ms / row.median_ms)} faster` : 'baseline'}>
+          <Gauge label="Time per photo" note={stage ? `${ratio(b.median_ms / row.median_ms)} faster` : 'original'}>
             <MotionNumber value={lat} format={fmtMs} initial={row.median_ms} />
           </Gauge>
-          <Gauge label="Parameters" note={stage ? `${ratio(b.parameters / row.parameters)} fewer` : 'baseline'}>
+          <Gauge label="Parameters" note={stage ? `${ratio(b.parameters / row.parameters)} fewer` : 'original'}>
             <MotionNumber value={par} format={fmtCount} initial={row.parameters} />
           </Gauge>
         </dl>
