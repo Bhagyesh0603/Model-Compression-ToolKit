@@ -99,6 +99,366 @@
      "source": "## 4 \u00b7 On your Mac (real speed check, once)\n\n```bash\nunzip resnet56_compressed.zip\npython experiments/verify_onnx.py --model resnet56_fp32.pt --onnx model.onnx\ncompresskit bench model.onnx\n```"
     }
    ]
+  },
+  {
+   "slug": "vgg16-cifar10",
+   "title": "VGG-16-BN on CIFAR-10",
+   "path": "kaggle/vgg16_cifar10_compression.ipynb",
+   "blurb": "Fine-tune an ImageNet-pretrained VGG-16-BN on CIFAR-10, then compress and evaluate it. Recipe availability does not imply a recorded result for this exact configuration.",
+   "cells": [
+    {
+     "type": "markdown",
+     "source": "# Compress VGG-16-BN (528 MB) on CIFAR-10 \u2014 Kaggle notebook, no ImageNet needed\n\n`ImageNet-pretrained VGG-16-BN  \u2192  new 10-class head, fine-tuned on CIFAR-10  \u2192  gradual prune + fine-tune  \u2192  INT8  \u2192  ONNX  \u2192  verify`\n\nA 138 M-parameter, 528 MB model, end to end, using only the CIFAR-10 dataset you already attach to the other notebooks.\nCIFAR-10 images are upscaled 32\u2192224 so the network keeps its real size; upscaling adds no detail, it only makes the model big.\n\n**Before Run All** (right panel): *Accelerator \u2192 GPU T4*, *Internet \u2192 On* (downloads the pretrained weights, 528 MB),\nand *Add Input \u2192 CIFAR-10* in the python-pickle format (it must contain a `cifar-10-batches-py` folder). Without it the notebook\ndownloads CIFAR-10 itself, which took about 50 minutes on a slow Kaggle link before.\n\nBatch size, mixed precision (fp16) and the GPU placement of every step are automatic; if a GPU run still reports\n\"out of GPU memory\", set `BATCH` to a smaller number. A pruned checkpoint is saved after every step under `work/`.\n\nTime: the 224\u00d7224 training passes dominate. Expect hours, not minutes, on a T4; lower `TRAIN_EPOCHS` / `STEPS` to shorten it.\nAccuracy is scored on a fixed 2000-image slice of the test set (the full 10,000 on CPU at every stage would take hours),\nso differences under about 1 pp are noise.\n\nEverything lands in `/kaggle/working/` \u2014 download `vgg16_cifar10_compressed.zip` from the *Output* tab."
+    },
+    {
+     "type": "code",
+     "source": "# ======================= CONFIG =======================\nARCH         = \"tv:vgg16_bn\"  # any torchvision ImageNet model: tv:resnet152, tv:vgg19_bn, ...\nTRAIN_EPOCHS = 1      # fine-tune the pretrained model on CIFAR-10 (the \"original\" we compress)\nPRUNE_RATIO  = 0.5    # fraction of channels removed (0.5 -> ~75% fewer parameters)\nSTEPS        = 3      # gradual pruning steps\nFT_EPOCHS    = 1      # fine-tune epochs after every step\nLOSS         = \"dkd\"  # \"kd\" | \"dkd\"\nBATCH        = \"auto\"   # \"auto\" probes the GPU for the largest batch that fits and accumulates up to 64\nCRITERION    = \"taylor\"  # channel importance: \"taylor\" (loss-aware, GPU) | \"magnitude\" (fast)\nPROTECT      = 2        # prune the 2 most quantization-sensitive layers at half the ratio (0 = off)\nCALIB        = 256    # calibration images for INT8 (train split)\nTEST_IMAGES  = 2000   # test images used to score every stage\n# ======================================================"
+    },
+    {
+     "type": "code",
+     "source": "import os, subprocess, sys, json, shutil, pathlib\nREPO = \"https://github.com/Bhagyesh0603/Model-Compression-ToolKit..git\"\nif not os.path.exists(\"/kaggle/working/ck\"):\n    subprocess.run([\"git\", \"clone\", \"-q\", REPO, \"/kaggle/working/ck\"], check=True)\nos.chdir(\"/kaggle/working/ck\")\n# --no-deps: never let pip swap the GPU build of torch that the platform ships; install only what is missing.\nsubprocess.run([sys.executable, \"-m\", \"pip\", \"install\", \"-q\", \"--no-deps\", \"-e\", \".\"], check=True)\nsubprocess.run([sys.executable, \"-m\", \"pip\", \"install\", \"-q\", \"torch-pruning>=1.5,<2.0\", \"onnx>=1.16\", \"onnxruntime>=1.19\", \"matplotlib\"], check=True)\n\nimport torch\n\nsmi = subprocess.run([\"nvidia-smi\", \"-L\"], capture_output=True, text=True) if shutil.which(\"nvidia-smi\") else None\nprint(\"nvidia-smi:\", smi.stdout.strip() if smi is not None and smi.returncode == 0 else \"no NVIDIA GPU visible to this session\")\nprint(\"GPU:\", torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"NONE -> training would take days on CPU; enable a GPU, then Restart & Run All\")\nfrom compresskit.zoo.data import resolve_root\nprint(\"CIFAR-10 location:\", resolve_root(), \"(attached dataset if under /kaggle/input, else it will download)\")\n\ndef run(*args):\n    args = [str(a) for a in args]\n    print(\"$\", \" \".join(args), flush=True)\n    return subprocess.run(args).returncode\n\nDATA = [\"--dataset\", \"cifar10-upscaled\", \"--input-size\", \"224\", \"--test-samples\", str(TEST_IMAGES)]"
+    },
+    {
+     "type": "markdown",
+     "source": "## 1 \u00b7 The original: pretrained VGG-16-BN with a CIFAR-10 head, fine-tuned"
+    },
+    {
+     "type": "code",
+     "source": "CKPT = \"checkpoints/vgg16_bn_cifar10.pt\"\nassert run(sys.executable, \"-m\", \"compresskit.cli\", \"train\", \"--arch\", ARCH, *DATA,\n           \"--epochs\", TRAIN_EPOCHS, \"--lr\", \"0.01\", \"--batch-size\", BATCH, \"--out\", CKPT) == 0, \"training failed - read the log above\""
+    },
+    {
+     "type": "markdown",
+     "source": "## 2 \u00b7 Compress: gradual prune + fine-tune \u2192 INT8 \u2192 evaluate the .onnx"
+    },
+    {
+     "type": "code",
+     "source": "OUT = \"/kaggle/working\"\ncode_ = run(sys.executable, \"-m\", \"compresskit.cli\", \"pipeline\", \"--model\", CKPT, *DATA,\n            \"--calib\", CALIB, \"--batch-size\", BATCH,\n            \"--criterion\", CRITERION, \"--protect-sensitive\", PROTECT,\n            \"--prune\", PRUNE_RATIO, \"--steps\", STEPS, \"--fine-tune-epochs\", FT_EPOCHS, \"--loss\", LOSS,\n            \"--precision\", \"int8\", \"--allow-slow-int8\",\n            \"--workdir\", f\"{OUT}/work\", \"--report\", f\"{OUT}/report.html\", \"--json\", f\"{OUT}/results.json\")\nassert code_ == 0, \"pipeline failed - read the log above\""
+    },
+    {
+     "type": "markdown",
+     "source": "## 3 \u00b7 Does the compressed model actually work? (original vs ONNX on real test images)"
+    },
+    {
+     "type": "code",
+     "source": "r = json.load(open(f\"{OUT}/results.json\"))\nshutil.copy(r[\"stages\"][-1][\"artifact\"], f\"{OUT}/model.onnx\")\nrun(sys.executable, \"experiments/verify_onnx.py\", \"--model\", CKPT, \"--onnx\", f\"{OUT}/model.onnx\",\n    \"--dataset\", \"cifar10-upscaled\", \"--input-size\", \"224\", \"--images\", 1000)"
+    },
+    {
+     "type": "markdown",
+     "source": "## 4 \u00b7 Summary and download bundle"
+    },
+    {
+     "type": "code",
+     "source": "b, f, t = r[\"baseline\"], r[\"stages\"][-1], r[\"totals\"]\nprint(f\"parameters: {b['parameters']:,} -> {f['parameters']:,}\")\nprint(f\"accuracy  : {b['accuracy']*100:.2f}% -> {f['accuracy']*100:.2f}%   (drop {t['accuracy_drop_pp']:.2f} pp, on {TEST_IMAGES} test images)\")\nprint(f\"size      : {b['size_mb']:.1f} MB -> {f['size_mb']:.1f} MB   ({t['size_reduction']:.1f}x smaller)\")\nprint(f\"precision : {f['precision']}\")\nprint(\"NOTE: latency in this run is Kaggle-CPU latency, not your device. Measure on the target: compresskit bench model.onnx --input-shape 1 3 224 224\")\n\nimport zipfile\nwith zipfile.ZipFile(f\"{OUT}/vgg16_cifar10_compressed.zip\", \"w\", zipfile.ZIP_DEFLATED) as z:\n    for name in (\"model.onnx\", \"report.html\", \"results.json\"):\n        z.write(f\"{OUT}/{name}\", name)\nprint(\"bundle:\", f\"{OUT}/vgg16_cifar10_compressed.zip\", f\"({os.path.getsize(f'{OUT}/vgg16_cifar10_compressed.zip')/1e6:.1f} MB)\")"
+    },
+    {
+     "type": "markdown",
+     "source": "## 5 \u00b7 On your Mac (real speed check, once)\n\n```bash\nunzip vgg16_cifar10_compressed.zip\ncompresskit bench model.onnx --input-shape 1 3 224 224\n```"
+    }
+   ]
+  },
+  {
+   "slug": "vgg16-imagenet",
+   "title": "VGG-16-BN on ImageNet",
+   "path": "kaggle/vgg16_imagenet_compression.ipynb",
+   "blurb": "Compress pretrained VGG-16-BN using ImageNet data. Requires the dataset described in the notebook; no result for this recipe is claimed here.",
+   "cells": [
+    {
+     "type": "markdown",
+     "source": "# Compress VGG-16-BN (ImageNet, 528 MB) \u2014 Kaggle notebook\n\n`torchvision VGG-16-BN (pretrained)  \u2192  gradual prune + fine-tune  \u2192  INT8 quantize  \u2192  ONNX  \u2192  verify against the original`\n\nThe step up from the CIFAR notebooks: **138 M parameters, 528 MB, 224\u00d7224 inputs**. The same pipeline, no model-specific code.\n\n**Before Run All** (right panel): *Accelerator \u2192 GPU T4*, *Internet \u2192 On* (downloads the pretrained weights),\nand *Add Input* an ImageNet dataset laid out as `train/<class>/*` and `val/<class>/*` with **all 1000 class folders**\n(the cell below searches `/kaggle/input` and stops with a clear message if it finds none).\n\nAccuracy is measured on a fixed 2000-image slice of the validation set (the full 50,000 on CPU would take hours at every stage),\nso differences under about 1 pp are noise.\n\nEverything lands in `/kaggle/working/` \u2014 download `vgg16_compressed.zip` from the *Output* tab."
+    },
+    {
+     "type": "code",
+     "source": "# ======================= CONFIG =======================\nARCH        = \"tv:vgg16_bn\"   # any torchvision ImageNet model: tv:resnet152, tv:vgg19_bn, ...\nPRUNE_RATIO = 0.5    # fraction of channels removed (0.5 -> ~75% fewer parameters)\nSTEPS       = 3      # gradual pruning steps\nFT_EPOCHS   = 1      # fine-tune epochs after every step (each epoch is a pass over the train split)\nLOSS        = \"dkd\"  # \"kd\" | \"dkd\"\nBATCH       = 32\nCALIB       = 256    # calibration images for INT8 (train split)\nTEST_IMAGES = 2000   # validation images used to score every stage\n# ======================================================"
+    },
+    {
+     "type": "code",
+     "source": "import os, subprocess, sys, json, shutil, pathlib\nREPO = \"https://github.com/Bhagyesh0603/Model-Compression-ToolKit..git\"\nif not os.path.exists(\"/kaggle/working/ck\"):\n    subprocess.run([\"git\", \"clone\", \"-q\", REPO, \"/kaggle/working/ck\"], check=True)\nos.chdir(\"/kaggle/working/ck\")\nsubprocess.run([sys.executable, \"-m\", \"pip\", \"install\", \"-q\", \"-e\", \".\"], check=True)\n\nimport torch\nprint(\"GPU:\", torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"NONE -> fine-tuning will run on CPU and take very long; enable a GPU, then Restart & Run All\")\n\ndef find_imagenet_root(base=\"/kaggle/input\"):\n    \"\"\"First directory that has train/ and val/ with 1000 class folders each.\"\"\"\n    for dirpath, dirnames, _ in os.walk(base):\n        if {\"train\", \"val\"} <= set(dirnames):\n            counts = [sum(os.path.isdir(os.path.join(dirpath, s, d)) for d in os.listdir(os.path.join(dirpath, s)))\n                      for s in (\"train\", \"val\")]\n            if counts == [1000, 1000]:\n                return dirpath\n        if dirpath.count(os.sep) - base.count(os.sep) >= 4:\n            dirnames[:] = []\n    return None\n\nDATA_ROOT = find_imagenet_root()\nassert DATA_ROOT, (\"No ImageNet-layout dataset under /kaggle/input. Add one with train/<class>/ and val/<class>/ \"\n                   \"(all 1000 classes) via Add Input, then re-run.\")\nprint(\"ImageNet root:\", DATA_ROOT)\n\ndef run(*args):\n    args = [str(a) for a in args]\n    print(\"$\", \" \".join(args), flush=True)\n    return subprocess.run(args).returncode"
+    },
+    {
+     "type": "markdown",
+     "source": "## 1 \u00b7 Save the pretrained original (the reference to verify against)"
+    },
+    {
+     "type": "code",
+     "source": "from compresskit.zoo.torchvision_models import build_torchvision\nfrom compresskit.zoo.train import save_model\noriginal = build_torchvision(ARCH)\nos.makedirs(\"checkpoints\", exist_ok=True)\nCKPT = \"checkpoints/vgg16_bn_imagenet.pt\"\nsave_model(original, CKPT, {\"arch\": ARCH, \"dataset\": \"imagenet\", \"input_shape\": [1, 3, 224, 224]})\nprint(f\"{sum(p.numel() for p in original.parameters()):,} parameters -> {CKPT}\")"
+    },
+    {
+     "type": "markdown",
+     "source": "## 2 \u00b7 Compress: gradual prune + fine-tune \u2192 INT8 \u2192 evaluate the .onnx"
+    },
+    {
+     "type": "code",
+     "source": "OUT = \"/kaggle/working\"\ncode_ = run(sys.executable, \"-m\", \"compresskit.cli\", \"pipeline\",\n            \"--model\", CKPT, \"--dataset\", \"imagenet\", \"--data-root\", DATA_ROOT,\n            \"--test-samples\", TEST_IMAGES, \"--calib\", CALIB, \"--batch-size\", BATCH,\n            \"--prune\", PRUNE_RATIO, \"--steps\", STEPS, \"--fine-tune-epochs\", FT_EPOCHS, \"--loss\", LOSS,\n            \"--precision\", \"int8\", \"--allow-slow-int8\",\n            \"--workdir\", f\"{OUT}/work\", \"--report\", f\"{OUT}/report.html\", \"--json\", f\"{OUT}/results.json\")\nassert code_ == 0, \"pipeline failed - read the log above\""
+    },
+    {
+     "type": "markdown",
+     "source": "## 3 \u00b7 Does the compressed model actually work? (original vs ONNX on real validation images)"
+    },
+    {
+     "type": "code",
+     "source": "r = json.load(open(f\"{OUT}/results.json\"))\nshutil.copy(r[\"stages\"][-1][\"artifact\"], f\"{OUT}/model.onnx\")\nrun(sys.executable, \"experiments/verify_onnx.py\", \"--model\", CKPT, \"--onnx\", f\"{OUT}/model.onnx\",\n    \"--dataset\", \"imagenet\", \"--data-root\", DATA_ROOT, \"--images\", 1000)"
+    },
+    {
+     "type": "markdown",
+     "source": "## 4 \u00b7 Summary and download bundle"
+    },
+    {
+     "type": "code",
+     "source": "b, f, t = r[\"baseline\"], r[\"stages\"][-1], r[\"totals\"]\nprint(f\"parameters: {b['parameters']:,} -> {f['parameters']:,}\")\nprint(f\"accuracy  : {b['accuracy']*100:.2f}% -> {f['accuracy']*100:.2f}%   (drop {t['accuracy_drop_pp']:.2f} pp, on {TEST_IMAGES} val images)\")\nprint(f\"size      : {b['size_mb']:.1f} MB -> {f['size_mb']:.1f} MB   ({t['size_reduction']:.1f}x smaller)\")\nprint(f\"precision : {f['precision']}\")\nprint(\"NOTE: latency in this run is Kaggle-CPU latency, not your device. Measure on the target: compresskit bench model.onnx --input-shape 1 3 224 224\")\n\nimport zipfile\nwith zipfile.ZipFile(f\"{OUT}/vgg16_compressed.zip\", \"w\", zipfile.ZIP_DEFLATED) as z:\n    for name in (\"model.onnx\", \"report.html\", \"results.json\"):\n        z.write(f\"{OUT}/{name}\", name)\nprint(\"bundle:\", f\"{OUT}/vgg16_compressed.zip\", f\"({os.path.getsize(f'{OUT}/vgg16_compressed.zip')/1e6:.1f} MB)\")"
+    },
+    {
+     "type": "markdown",
+     "source": "## 5 \u00b7 On your Mac (real speed check, once)\n\n```bash\nunzip vgg16_compressed.zip\ncompresskit bench model.onnx --input-shape 1 3 224 224\n```"
+    }
+   ]
+  },
+  {
+   "slug": "gpu-validation",
+   "title": "GPU validation",
+   "path": "kaggle/gpu_validation.ipynb",
+   "blurb": "Check CUDA support and exercise a short compression workflow. This is a validation recipe, not a full accuracy benchmark.",
+   "cells": [
+    {
+     "type": "markdown",
+     "source": "# compresskit \u2014 GPU validation notebook (Kaggle or Colab)\n\nChecks that the large-model changes really work on a **CUDA GPU**, then runs a short end-to-end compression with timings.\nThose code paths (fp16 AMP, auto batch-size probe, Taylor pruning on GPU, per-step checkpoints) can only be tested on a GPU.\n\n| # | Check | What it proves |\n|---|-------|----------------|\n| 1 | unit tests | the test-suite passes on this machine |\n| 2 | AMP speed | fp16 autocast runs and is faster than fp32 (`img/s` for both) |\n| 3 | batch probe | `fit_batch_size` finds a batch that fits, and leaves BatchNorm statistics untouched |\n| 4 | data path | 32\u2192224 GPU upscaling feeds the model (`img/s`) |\n| 5 | Taylor pruning | importance backward pass runs on the GPU without OOM |\n| 6 | end to end | short head fine-tune \u2192 gradual prune + fine-tune \u2192 INT8 \u2192 ONNX, a checkpoint saved per step |\n\n**Kaggle:** *Accelerator \u2192 GPU T4*, *Internet \u2192 On*, optionally *Add Input \u2192 CIFAR-10* (python-pickle, has `cifar-10-batches-py`).\n**Colab:** *Runtime \u2192 Change runtime type \u2192 T4 GPU*. CIFAR-10 downloads (170 MB).\n\nThis is a **mechanics test, not a benchmark**: the end-to-end part trains the new head for only a few hundred batches\nand fine-tunes for a few batches per step, so its accuracy numbers show the pipeline works, not the final quality.\nChange `ARCH` to test another model (`tv:resnet152`, `tv:densenet121`, `tv:convnext_tiny`, `tv:vgg16_bn`)."
+    },
+    {
+     "type": "code",
+     "source": "# ======================= CONFIG =======================\nARCH           = \"tv:resnet50\"   # try: tv:resnet152, tv:densenet121, tv:convnext_tiny, tv:vgg16_bn\nREQUIRE_GPU    = True            # stop at once if no CUDA GPU is attached\nPRUNE_RATIO    = 0.5\nSTEPS          = 2               # gradual pruning steps\nHEAD_BATCHES   = 150             # batches used to train the new 10-class head\nFT_BATCHES     = 40              # training batches per fine-tune epoch after each prune step\nREQUESTED_BATCH = 64             # effective training batch; the probe may split it into micro-batches\nTEST_IMAGES    = 500             # test images used to score every stage\nCALIB          = 128             # calibration images (BN, INT8, Taylor)\n# ======================================================"
+    },
+    {
+     "type": "code",
+     "source": "import os, subprocess, sys, json, shutil, time, copy, itertools, pathlib\nIN_COLAB = \"COLAB_RELEASE_TAG\" in os.environ or os.path.exists(\"/content\")\nWORK = \"/content\" if IN_COLAB and not os.path.exists(\"/kaggle/working\") else \"/kaggle/working\"\nprint(\"platform:\", \"Colab\" if WORK == \"/content\" else \"Kaggle\", \"| working dir:\", WORK)\nREPO = \"https://github.com/Bhagyesh0603/Model-Compression-ToolKit..git\"\nif not os.path.exists(f\"{WORK}/ck\"):\n    subprocess.run([\"git\", \"clone\", \"-q\", REPO, f\"{WORK}/ck\"], check=True)\nos.chdir(f\"{WORK}/ck\")\n# --no-deps: never let pip swap the GPU build of torch that the platform ships; install only what is missing.\nsubprocess.run([sys.executable, \"-m\", \"pip\", \"install\", \"-q\", \"--no-deps\", \"-e\", \".\"], check=True)\nsubprocess.run([sys.executable, \"-m\", \"pip\", \"install\", \"-q\", \"torch-pruning>=1.5,<2.0\", \"onnx>=1.16\", \"onnxruntime>=1.19\", \"matplotlib\"], check=True)\n\nimport torch\n\nsmi = subprocess.run([\"nvidia-smi\", \"-L\"], capture_output=True, text=True) if shutil.which(\"nvidia-smi\") else None\nprint(\"nvidia-smi:\", smi.stdout.strip() if smi is not None and smi.returncode == 0 else \"no NVIDIA GPU visible to this session\")\nCUDA = torch.cuda.is_available()\nprint(\"GPU:\", torch.cuda.get_device_name(0) if CUDA else \"NONE\")\nprint(\"torch\", torch.__version__, \"| cuda\", torch.version.cuda)\nif REQUIRE_GPU and not CUDA:\n    if smi is not None and smi.returncode == 0:\n        raise SystemExit(f\"A GPU is attached but this PyTorch build cannot use it (torch {torch.__version__}). Restart the session and Run All again; if it repeats, send me this output.\")\n    raise SystemExit(\"No GPU is attached. Kaggle: right panel -> Accelerator -> GPU T4, then Restart & Run All.  Colab: Runtime -> Change runtime type -> T4 GPU.\")\nassert os.path.exists(\"compresskit/core/amp.py\"), \"this clone is missing the large-model changes - push them to GitHub first\""
+    },
+    {
+     "type": "code",
+     "source": "from compresskit.core import amp\nfrom compresskit.core.host import compute_device\nfrom compresskit.core.memory import fit_batch_size, split_batch\nfrom compresskit.zoo.datasets import get_bundle\nfrom compresskit.zoo.torchvision_models import build_torchvision, replace_head\n\nDEV = compute_device()\nRESULTS = {}\n\ndef check(name, ok, detail=\"\"):\n    RESULTS[name] = {\"pass\": bool(ok), \"detail\": detail}\n    print((\"PASS \" if ok else \"FAIL \") + name + (f\"  --  {detail}\" if detail else \"\"), flush=True)\n\ndef sync():\n    if CUDA: torch.cuda.synchronize()\n\ndef peak_gb():\n    return torch.cuda.max_memory_allocated() / 1e9 if CUDA else 0.0\n\ndef reset_peak():\n    if CUDA: torch.cuda.reset_peak_memory_stats()\n\ndef fresh():\n    return replace_head(build_torchvision(ARCH), 10)\n\nclass Few:\n    \"\"\"First n batches of a loader, with the attributes the pipeline reads.\"\"\"\n    def __init__(self, loader, n): self.loader, self.n = loader, n\n    def __len__(self): return min(self.n, len(self.loader))\n    batch_size = property(lambda s: s.loader.batch_size)\n    dataset = property(lambda s: s.loader.dataset)\n    def __iter__(self): return itertools.islice(iter(self.loader), self.n)\n\nbundle = get_bundle(\"cifar10-upscaled\", None, 224, TEST_IMAGES, 0)\nprint(\"device for compute:\", DEV)"
+    },
+    {
+     "type": "markdown",
+     "source": "## 1 \u00b7 Unit tests on this machine"
+    },
+    {
+     "type": "code",
+     "source": "r = subprocess.run([sys.executable, \"-m\", \"pytest\", \"tests\", \"-q\", \"-x\", \"-p\", \"no:cacheprovider\"], capture_output=True, text=True)\nprint(r.stdout[-600:])\ncheck(\"1 unit tests\", r.returncode == 0, r.stdout.strip().splitlines()[-1] if r.stdout.strip() else r.stderr[-200:])"
+    },
+    {
+     "type": "markdown",
+     "source": "## 2 \u00b7 fp16 AMP vs fp32 training speed (needs CUDA)"
+    },
+    {
+     "type": "code",
+     "source": "def train_rate(model, use_amp, batch=16, iters=8):\n    amp.prepare_model(model, DEV).train()\n    opt = torch.optim.SGD(model.parameters(), lr=1e-3, momentum=0.9)\n    scaler = amp.Scaler(DEV, use_amp)\n    x = amp.prepare_batch(torch.randn(batch, 3, 224, 224), DEV)\n    y = torch.randint(0, 10, (batch,), device=DEV)\n    def one():\n        with amp.autocast(DEV, use_amp):\n            out = model(x)\n        loss = torch.nn.functional.cross_entropy(out.float(), y)\n        opt.zero_grad(set_to_none=True); scaler.backward(loss); scaler.step(opt)\n        return loss\n    for _ in range(3): one()\n    sync(); reset_peak(); t = time.perf_counter()\n    for _ in range(iters): loss = one()\n    sync()\n    assert torch.isfinite(loss), \"loss is not finite\"\n    return batch * iters / (time.perf_counter() - t), peak_gb()\n\nif CUDA:\n    try:\n        fp32_rate, fp32_mem = train_rate(fresh(), False)\n        amp_rate, amp_mem = train_rate(fresh(), True)\n        print(f\"fp32: {fp32_rate:7.1f} img/s  peak {fp32_mem:.2f} GB\")\n        print(f\"amp : {amp_rate:7.1f} img/s  peak {amp_mem:.2f} GB   -> {amp_rate / fp32_rate:.2f}x speed, {fp32_mem / max(amp_mem, 1e-9):.2f}x less memory\")\n        check(\"2 AMP training step\", True, f\"{amp_rate / fp32_rate:.2f}x faster, {fp32_mem / max(amp_mem, 1e-9):.2f}x less memory\")\n    except Exception as e:\n        check(\"2 AMP training step\", False, repr(e)[:200])\nelse:\n    print(\"skipped: no CUDA\"); check(\"2 AMP training step\", True, \"skipped (no CUDA)\")"
+    },
+    {
+     "type": "markdown",
+     "source": "## 3 \u00b7 Auto batch size probe"
+    },
+    {
+     "type": "code",
+     "source": "model = fresh()\nbefore = {k: v.clone() for k, v in model.state_dict().items()}\nt = time.perf_counter()\nfitted = fit_batch_size(model, bundle.input_shape, start=256, device=DEV, teacher=model)\nmicro, accum = split_batch(REQUESTED_BATCH, fitted)\nmodel.cpu()\nbn_same = all(torch.equal(v, before[k]) for k, v in model.state_dict().items())\nprint(f\"largest batch that fits at 224x224: {fitted}   ({time.perf_counter() - t:.1f}s)\")\nprint(f\"requested effective batch {REQUESTED_BATCH} -> micro-batch {micro} x {accum} accumulation steps\")\ncheck(\"3 batch probe\", fitted >= 1 and bn_same, f\"fits {fitted}; BN stats {'untouched' if bn_same else 'MODIFIED'}\")\ndel model"
+    },
+    {
+     "type": "markdown",
+     "source": "## 4 \u00b7 Data path (GPU upscaling)"
+    },
+    {
+     "type": "code",
+     "source": "loader = bundle.train_loader(batch_size=micro)\nn_batches = 30\nit = iter(loader); next(it)\nsync(); t = time.perf_counter(); seen = 0\nfor _ in range(n_batches):\n    x, y = next(it); seen += len(x)\nsync()\nrate = seen / (time.perf_counter() - t)\nprint(f\"train loader: {rate:.0f} img/s   batch {tuple(x.shape)} on {x.device}\")\ncheck(\"4 data path\", x.shape[-1] == 224 and rate > 0, f\"{rate:.0f} img/s, batch on {x.device}\")\ndel it, loader"
+    },
+    {
+     "type": "markdown",
+     "source": "## 5 \u00b7 Taylor pruning on the GPU"
+    },
+    {
+     "type": "code",
+     "source": "from compresskit.pruning.prune import prune\ncalib = bundle.calibration_loader(n=CALIB, batch_size=min(micro, 32))\nnet = fresh().cpu().eval()\nreset_peak(); t = time.perf_counter()\ntry:\n    pruned, stats = prune(net, torch.randn(*bundle.input_shape), ratio=PRUNE_RATIO, align=16, steps=1,\n                          criterion=\"taylor\", loader=calib, batches=2)\n    removed = 1 - sum(p.numel() for p in pruned.parameters()) / sum(p.numel() for p in net.parameters())\n    print(f\"{stats.summary()}\\n{time.perf_counter() - t:.1f}s, peak GPU memory {peak_gb():.2f} GB\")\n    check(\"5 Taylor pruning\", removed > 0.3, f\"{removed * 100:.0f}% params removed, peak {peak_gb():.2f} GB\")\nexcept Exception as e:\n    check(\"5 Taylor pruning\", False, repr(e)[:200])\ndel net"
+    },
+    {
+     "type": "markdown",
+     "source": "## 6 \u00b7 End to end: head fine-tune \u2192 gradual prune + fine-tune \u2192 INT8 \u2192 ONNX\nMechanics only: the head is trained for `HEAD_BATCHES` batches and each fine-tune epoch uses `FT_BATCHES` batches."
+    },
+    {
+     "type": "code",
+     "source": "from compresskit.pipeline import Pipeline\nfrom compresskit.zoo.train import TrainConfig, train\n\ntrain_loader = bundle.train_loader(batch_size=micro)\ntest_loader = bundle.test_loader(batch_size=micro)\noriginal = fresh()\nt0 = time.perf_counter()\ntrain(original, Few(train_loader, HEAD_BATCHES),\n      TrainConfig(epochs=1, lr=0.01, warmup_epochs=0, device=DEV, amp=True, accum_steps=accum))\nprint(f\"head fine-tune: {time.perf_counter() - t0:.0f}s\")\n\nwork = f\"{WORK}/validate_work\"\nshutil.rmtree(work, ignore_errors=True)\npipe = Pipeline(original, calib, test_loader, train_loader=Few(train_loader, FT_BATCHES),\n                input_shape=bundle.input_shape, workdir=work, warmup=5, runs=20, device=DEV, accum_steps=accum)\npipe.prune(ratio=PRUNE_RATIO, align=16, steps=STEPS, criterion=\"taylor\", fine_tune_epochs=1, loss=\"dkd\")\npipe.quantize(precision=\"int8\", allow_slow_int8=True)\nprint(pipe.preflight()); print()\nt0 = time.perf_counter()\ntry:\n    result = pipe.run()\n    elapsed = time.perf_counter() - t0\n    print(); print(result.summary()); print(f\"pipeline wall time: {elapsed:.0f}s\")\n    ckpts = sorted(p.name for p in pathlib.Path(work).glob(\"prune_step*.pt\"))\n    b, f = result.baseline, result.final\n    removed = 1 - f.parameters / b.parameters\n    check(\"6 end to end\", len(ckpts) == STEPS and removed > 0.5 and f.precision == \"int8\" and os.path.exists(f.artifact),\n          f\"acc {b.accuracy*100:.1f}% -> {f.accuracy*100:.1f}%, params -{removed*100:.0f}%, size {b.size_mb:.0f} -> {f.size_mb:.1f} MB, \"\n          f\"{len(ckpts)} step checkpoints, {elapsed:.0f}s\")\nexcept Exception as e:\n    import traceback; traceback.print_exc()\n    check(\"6 end to end\", False, repr(e)[:200])"
+    },
+    {
+     "type": "markdown",
+     "source": "## Summary"
+    },
+    {
+     "type": "code",
+     "source": "print(f\"{'check':<24}{'result':<8}detail\"); print(\"-\" * 90)\nfor name, r in RESULTS.items():\n    print(f\"{name:<24}{'PASS' if r['pass'] else 'FAIL':<8}{r['detail']}\")\nall_ok = all(r[\"pass\"] for r in RESULTS.values())\nprint(\"\\nALL CHECKS PASSED\" if all_ok else \"\\nSOME CHECKS FAILED - copy this whole output and send it back\")\n\ninfo = {\"arch\": ARCH, \"gpu\": torch.cuda.get_device_name(0) if CUDA else None, \"torch\": torch.__version__,\n        \"platform\": \"colab\" if WORK == \"/content\" else \"kaggle\", \"results\": RESULTS}\nout = f\"{WORK}/gpu_validation_results.json\"\njson.dump(info, open(out, \"w\"), indent=2)\nprint(\"saved\", out)\nif WORK == \"/content\":\n    from google.colab import files\n    files.download(out)"
+    }
+   ]
+  },
+  {
+   "slug": "resnet152-cifar10",
+   "title": "ResNet-152 on CIFAR-10",
+   "path": "kaggle/new/resnet152_cifar10_compression.ipynb",
+   "blurb": "A larger residual-network compression recipe. No completed run is included in the website results yet.",
+   "cells": [
+    {
+     "type": "markdown",
+     "source": "# Compress ResNet-152 (232 MB, 58 M parameters) on CIFAR-10 \u2014 Kaggle or Colab notebook (Member 1)\n\n`ImageNet-pretrained ResNet-152  \u2192  new 10-class head, fine-tuned on CIFAR-10  \u2192  gradual prune + fine-tune  \u2192  INT8  \u2192  ONNX  \u2192  verify`\n\n**Why this model is hard to compress:** the deepest standard residual network: 152 layers, bottleneck blocks, and every residual add forces the pruner to keep whole groups of channels aligned.\n**What to watch:** Residual ties: layers joined by a skip connection must be pruned together, so one bad ratio on a stage drags several layers.\n\nCIFAR-10 images are upscaled 32\u2192224 so the network keeps its real size; upscaling adds no detail, it only makes the model big.\n\n**Kaggle \u2014 before Run All** (right panel): *Accelerator \u2192 GPU T4*, *Internet \u2192 On* (downloads the pretrained weights),\nand *Add Input \u2192 CIFAR-10* in the python-pickle format (it must contain a `cifar-10-batches-py` folder). Without it the notebook\ndownloads CIFAR-10 itself, which took about 50 minutes on a slow Kaggle link before.\n\n**Colab \u2014 before Run All:** *Runtime \u2192 Change runtime type \u2192 T4 GPU*. There is no \"Add Input\", so CIFAR-10 always downloads (170 MB).\nAt the end the zip is offered as a browser download. The notebook detects which platform it is on by itself.\n\nBatch size, mixed precision (fp16) and the GPU placement of every step are automatic; if a GPU run still reports\n\"out of GPU memory\", set `BATCH` to a smaller number. A pruned checkpoint is saved after every step under `work/`.\n\nTime: the 224\u00d7224 training passes dominate. Expect hours, not minutes, on a T4; lower `TRAIN_EPOCHS` / `STEPS` to shorten it\n(Kaggle sessions stop after 12 h). Accuracy is scored on a fixed 2000-image slice of the test set, so differences under about 1 pp are noise.\n\nEverything lands in `/kaggle/working/` \u2014 download `resnet152_cifar10_compressed.zip` from the *Output* tab (Kaggle) or the browser download prompt (Colab)."
+    },
+    {
+     "type": "code",
+     "source": "# ======================= CONFIG =======================\nARCH         = \"tv:resnet152\"  # any torchvision ImageNet model: tv:resnet152, tv:densenet121, tv:convnext_tiny, tv:efficientnet_b0, ...\nTRAIN_EPOCHS = 2      # fine-tune the pretrained model on CIFAR-10 (the \"original\" we compress)\nPRUNE_RATIO  = 0.5    # fraction of channels removed (0.5 -> ~75% fewer parameters)\nSTEPS        = 3      # gradual pruning steps\nFT_EPOCHS    = 1      # fine-tune epochs after every step\nLOSS         = \"dkd\"  # \"kd\" | \"dkd\"\nBATCH        = \"auto\"   # \"auto\" probes the GPU for the largest batch that fits and accumulates up to 64\nCRITERION    = \"taylor\"  # channel importance: \"taylor\" (loss-aware, GPU) | \"magnitude\" (fast)\nPROTECT      = 2        # prune the 2 most quantization-sensitive layers at half the ratio (0 = off)\nCALIB        = 256    # calibration images for INT8 (train split)\nTEST_IMAGES  = 2000   # test images used to score every stage\n# ======================================================"
+    },
+    {
+     "type": "code",
+     "source": "import os, subprocess, sys, json, shutil, pathlib\nIN_COLAB = \"COLAB_RELEASE_TAG\" in os.environ or os.path.exists(\"/content\")\nWORK = \"/content\" if IN_COLAB and not os.path.exists(\"/kaggle/working\") else \"/kaggle/working\"\nprint(\"platform:\", \"Colab\" if WORK == \"/content\" else \"Kaggle\", \"| working dir:\", WORK)\nREPO = \"https://github.com/Bhagyesh0603/Model-Compression-ToolKit..git\"\nif not os.path.exists(f\"{WORK}/ck\"):\n    subprocess.run([\"git\", \"clone\", \"-q\", REPO, f\"{WORK}/ck\"], check=True)\nos.chdir(f\"{WORK}/ck\")\n# --no-deps: never let pip swap the GPU build of torch that the platform ships; install only what is missing.\nsubprocess.run([sys.executable, \"-m\", \"pip\", \"install\", \"-q\", \"--no-deps\", \"-e\", \".\"], check=True)\nsubprocess.run([sys.executable, \"-m\", \"pip\", \"install\", \"-q\", \"torch-pruning>=1.5,<2.0\", \"onnx>=1.16\", \"onnxruntime>=1.19\", \"matplotlib\"], check=True)\n\nimport torch\n\nsmi = subprocess.run([\"nvidia-smi\", \"-L\"], capture_output=True, text=True) if shutil.which(\"nvidia-smi\") else None\nprint(\"nvidia-smi:\", smi.stdout.strip() if smi is not None and smi.returncode == 0 else \"no NVIDIA GPU visible to this session\")\nprint(\"GPU:\", torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"NONE -> training would take days on CPU; enable a GPU (Kaggle: right panel; Colab: Runtime > Change runtime type), then Restart & Run All\")\nfrom compresskit.zoo.data import resolve_root\nprint(\"CIFAR-10 location:\", resolve_root(), \"(attached dataset if under /kaggle/input, else it will download)\")\n\ndef run(*args):\n    args = [str(a) for a in args]\n    print(\"$\", \" \".join(args), flush=True)\n    return subprocess.run(args).returncode\n\nDATA = [\"--dataset\", \"cifar10-upscaled\", \"--input-size\", \"224\", \"--test-samples\", str(TEST_IMAGES)]"
+    },
+    {
+     "type": "markdown",
+     "source": "## 1 \u00b7 The original: pretrained ResNet-152 with a CIFAR-10 head, fine-tuned"
+    },
+    {
+     "type": "code",
+     "source": "CKPT = \"checkpoints/resnet152_cifar10.pt\"\nassert run(sys.executable, \"-m\", \"compresskit.cli\", \"train\", \"--arch\", ARCH, *DATA,\n           \"--epochs\", TRAIN_EPOCHS, \"--lr\", \"0.01\", \"--batch-size\", BATCH, \"--out\", CKPT) == 0, \"training failed - read the log above\""
+    },
+    {
+     "type": "markdown",
+     "source": "## 2 \u00b7 Compress: gradual prune + fine-tune \u2192 INT8 \u2192 evaluate the .onnx"
+    },
+    {
+     "type": "code",
+     "source": "OUT = WORK\ncode_ = run(sys.executable, \"-m\", \"compresskit.cli\", \"pipeline\", \"--model\", CKPT, *DATA,\n            \"--calib\", CALIB, \"--batch-size\", BATCH,\n            \"--criterion\", CRITERION, \"--protect-sensitive\", PROTECT,\n            \"--prune\", PRUNE_RATIO, \"--steps\", STEPS, \"--fine-tune-epochs\", FT_EPOCHS, \"--loss\", LOSS,\n            \"--precision\", \"int8\", \"--allow-slow-int8\",\n            \"--workdir\", f\"{OUT}/work\", \"--report\", f\"{OUT}/report.html\", \"--json\", f\"{OUT}/results.json\")\nassert code_ == 0, \"pipeline failed - read the log above\""
+    },
+    {
+     "type": "markdown",
+     "source": "## 3 \u00b7 Does the compressed model actually work? (original vs ONNX on real test images)"
+    },
+    {
+     "type": "code",
+     "source": "r = json.load(open(f\"{OUT}/results.json\"))\nshutil.copy(r[\"stages\"][-1][\"artifact\"], f\"{OUT}/model.onnx\")\nrun(sys.executable, \"experiments/verify_onnx.py\", \"--model\", CKPT, \"--onnx\", f\"{OUT}/model.onnx\",\n    \"--dataset\", \"cifar10-upscaled\", \"--input-size\", \"224\", \"--images\", 1000)"
+    },
+    {
+     "type": "markdown",
+     "source": "## 4 \u00b7 Summary and download bundle"
+    },
+    {
+     "type": "code",
+     "source": "b, f, t = r[\"baseline\"], r[\"stages\"][-1], r[\"totals\"]\nprint(f\"parameters: {b['parameters']:,} -> {f['parameters']:,}\")\nprint(f\"accuracy  : {b['accuracy']*100:.2f}% -> {f['accuracy']*100:.2f}%   (drop {t['accuracy_drop_pp']:.2f} pp, on {TEST_IMAGES} test images)\")\nprint(f\"size      : {b['size_mb']:.1f} MB -> {f['size_mb']:.1f} MB   ({t['size_reduction']:.1f}x smaller)\")\nprint(f\"precision : {f['precision']}\")\nprint(\"NOTE: latency in this run is Kaggle-CPU latency, not your device. Measure on the target: compresskit bench model.onnx --input-shape 1 3 224 224\")\n\nimport zipfile\nwith zipfile.ZipFile(f\"{OUT}/resnet152_cifar10_compressed.zip\", \"w\", zipfile.ZIP_DEFLATED) as z:\n    for name in (\"model.onnx\", \"report.html\", \"results.json\"):\n        z.write(f\"{OUT}/{name}\", name)\nprint(\"bundle:\", f\"{OUT}/resnet152_cifar10_compressed.zip\", f\"({os.path.getsize(f'{OUT}/resnet152_cifar10_compressed.zip')/1e6:.1f} MB)\")\n\nif WORK == \"/content\":\n    from google.colab import files\n    files.download(f\"{OUT}/resnet152_cifar10_compressed.zip\")"
+    },
+    {
+     "type": "markdown",
+     "source": "## 5 \u00b7 On your Mac (real speed check, once)\n\n```bash\nunzip resnet152_cifar10_compressed.zip\ncompresskit bench model.onnx --input-shape 1 3 224 224\n```"
+    }
+   ]
+  },
+  {
+   "slug": "densenet121-cifar10",
+   "title": "DenseNet-121 on CIFAR-10",
+   "path": "kaggle/new/densenet121_cifar10_compression.ipynb",
+   "blurb": "A dense-connectivity compression recipe. No completed run is included in the website results yet.",
+   "cells": [
+    {
+     "type": "markdown",
+     "source": "# Compress DenseNet-121 (27 MB, 7 M parameters) on CIFAR-10 \u2014 Kaggle or Colab notebook (Member 2)\n\n`ImageNet-pretrained DenseNet-121  \u2192  new 10-class head, fine-tuned on CIFAR-10  \u2192  gradual prune + fine-tune  \u2192  INT8  \u2192  ONNX  \u2192  verify`\n\n**Why this model is hard to compress:** dense connectivity: every layer takes the concatenation of all earlier layers' outputs, so pruning one layer's output changes the input width of every later layer in the block.\n**What to watch:** Concatenation ties: channel pruning cascades through the whole dense block, which is the hardest dependency pattern for structured pruning.\n\nCIFAR-10 images are upscaled 32\u2192224 so the network keeps its real size; upscaling adds no detail, it only makes the model big.\n\n**Kaggle \u2014 before Run All** (right panel): *Accelerator \u2192 GPU T4*, *Internet \u2192 On* (downloads the pretrained weights),\nand *Add Input \u2192 CIFAR-10* in the python-pickle format (it must contain a `cifar-10-batches-py` folder). Without it the notebook\ndownloads CIFAR-10 itself, which took about 50 minutes on a slow Kaggle link before.\n\n**Colab \u2014 before Run All:** *Runtime \u2192 Change runtime type \u2192 T4 GPU*. There is no \"Add Input\", so CIFAR-10 always downloads (170 MB).\nAt the end the zip is offered as a browser download. The notebook detects which platform it is on by itself.\n\nBatch size, mixed precision (fp16) and the GPU placement of every step are automatic; if a GPU run still reports\n\"out of GPU memory\", set `BATCH` to a smaller number. A pruned checkpoint is saved after every step under `work/`.\n\nTime: the 224\u00d7224 training passes dominate. Expect hours, not minutes, on a T4; lower `TRAIN_EPOCHS` / `STEPS` to shorten it\n(Kaggle sessions stop after 12 h). Accuracy is scored on a fixed 2000-image slice of the test set, so differences under about 1 pp are noise.\n\nEverything lands in `/kaggle/working/` \u2014 download `densenet121_cifar10_compressed.zip` from the *Output* tab (Kaggle) or the browser download prompt (Colab)."
+    },
+    {
+     "type": "code",
+     "source": "# ======================= CONFIG =======================\nARCH         = \"tv:densenet121\"  # any torchvision ImageNet model: tv:resnet152, tv:densenet121, tv:convnext_tiny, tv:efficientnet_b0, ...\nTRAIN_EPOCHS = 2      # fine-tune the pretrained model on CIFAR-10 (the \"original\" we compress)\nPRUNE_RATIO  = 0.5    # fraction of channels removed (0.5 -> ~75% fewer parameters)\nSTEPS        = 3      # gradual pruning steps\nFT_EPOCHS    = 1      # fine-tune epochs after every step\nLOSS         = \"dkd\"  # \"kd\" | \"dkd\"\nBATCH        = \"auto\"   # \"auto\" probes the GPU for the largest batch that fits and accumulates up to 64\nCRITERION    = \"taylor\"  # channel importance: \"taylor\" (loss-aware, GPU) | \"magnitude\" (fast)\nPROTECT      = 2        # prune the 2 most quantization-sensitive layers at half the ratio (0 = off)\nCALIB        = 256    # calibration images for INT8 (train split)\nTEST_IMAGES  = 2000   # test images used to score every stage\n# ======================================================"
+    },
+    {
+     "type": "code",
+     "source": "import os, subprocess, sys, json, shutil, pathlib\nIN_COLAB = \"COLAB_RELEASE_TAG\" in os.environ or os.path.exists(\"/content\")\nWORK = \"/content\" if IN_COLAB and not os.path.exists(\"/kaggle/working\") else \"/kaggle/working\"\nprint(\"platform:\", \"Colab\" if WORK == \"/content\" else \"Kaggle\", \"| working dir:\", WORK)\nREPO = \"https://github.com/Bhagyesh0603/Model-Compression-ToolKit..git\"\nif not os.path.exists(f\"{WORK}/ck\"):\n    subprocess.run([\"git\", \"clone\", \"-q\", REPO, f\"{WORK}/ck\"], check=True)\nos.chdir(f\"{WORK}/ck\")\n# --no-deps: never let pip swap the GPU build of torch that the platform ships; install only what is missing.\nsubprocess.run([sys.executable, \"-m\", \"pip\", \"install\", \"-q\", \"--no-deps\", \"-e\", \".\"], check=True)\nsubprocess.run([sys.executable, \"-m\", \"pip\", \"install\", \"-q\", \"torch-pruning>=1.5,<2.0\", \"onnx>=1.16\", \"onnxruntime>=1.19\", \"matplotlib\"], check=True)\n\nimport torch\n\nsmi = subprocess.run([\"nvidia-smi\", \"-L\"], capture_output=True, text=True) if shutil.which(\"nvidia-smi\") else None\nprint(\"nvidia-smi:\", smi.stdout.strip() if smi is not None and smi.returncode == 0 else \"no NVIDIA GPU visible to this session\")\nprint(\"GPU:\", torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"NONE -> training would take days on CPU; enable a GPU (Kaggle: right panel; Colab: Runtime > Change runtime type), then Restart & Run All\")\nfrom compresskit.zoo.data import resolve_root\nprint(\"CIFAR-10 location:\", resolve_root(), \"(attached dataset if under /kaggle/input, else it will download)\")\n\ndef run(*args):\n    args = [str(a) for a in args]\n    print(\"$\", \" \".join(args), flush=True)\n    return subprocess.run(args).returncode\n\nDATA = [\"--dataset\", \"cifar10-upscaled\", \"--input-size\", \"224\", \"--test-samples\", str(TEST_IMAGES)]"
+    },
+    {
+     "type": "markdown",
+     "source": "## 1 \u00b7 The original: pretrained DenseNet-121 with a CIFAR-10 head, fine-tuned"
+    },
+    {
+     "type": "code",
+     "source": "CKPT = \"checkpoints/densenet121_cifar10.pt\"\nassert run(sys.executable, \"-m\", \"compresskit.cli\", \"train\", \"--arch\", ARCH, *DATA,\n           \"--epochs\", TRAIN_EPOCHS, \"--lr\", \"0.01\", \"--batch-size\", BATCH, \"--out\", CKPT) == 0, \"training failed - read the log above\""
+    },
+    {
+     "type": "markdown",
+     "source": "## 2 \u00b7 Compress: gradual prune + fine-tune \u2192 INT8 \u2192 evaluate the .onnx"
+    },
+    {
+     "type": "code",
+     "source": "OUT = WORK\ncode_ = run(sys.executable, \"-m\", \"compresskit.cli\", \"pipeline\", \"--model\", CKPT, *DATA,\n            \"--calib\", CALIB, \"--batch-size\", BATCH,\n            \"--criterion\", CRITERION, \"--protect-sensitive\", PROTECT,\n            \"--prune\", PRUNE_RATIO, \"--steps\", STEPS, \"--fine-tune-epochs\", FT_EPOCHS, \"--loss\", LOSS,\n            \"--precision\", \"int8\", \"--allow-slow-int8\",\n            \"--workdir\", f\"{OUT}/work\", \"--report\", f\"{OUT}/report.html\", \"--json\", f\"{OUT}/results.json\")\nassert code_ == 0, \"pipeline failed - read the log above\""
+    },
+    {
+     "type": "markdown",
+     "source": "## 3 \u00b7 Does the compressed model actually work? (original vs ONNX on real test images)"
+    },
+    {
+     "type": "code",
+     "source": "r = json.load(open(f\"{OUT}/results.json\"))\nshutil.copy(r[\"stages\"][-1][\"artifact\"], f\"{OUT}/model.onnx\")\nrun(sys.executable, \"experiments/verify_onnx.py\", \"--model\", CKPT, \"--onnx\", f\"{OUT}/model.onnx\",\n    \"--dataset\", \"cifar10-upscaled\", \"--input-size\", \"224\", \"--images\", 1000)"
+    },
+    {
+     "type": "markdown",
+     "source": "## 4 \u00b7 Summary and download bundle"
+    },
+    {
+     "type": "code",
+     "source": "b, f, t = r[\"baseline\"], r[\"stages\"][-1], r[\"totals\"]\nprint(f\"parameters: {b['parameters']:,} -> {f['parameters']:,}\")\nprint(f\"accuracy  : {b['accuracy']*100:.2f}% -> {f['accuracy']*100:.2f}%   (drop {t['accuracy_drop_pp']:.2f} pp, on {TEST_IMAGES} test images)\")\nprint(f\"size      : {b['size_mb']:.1f} MB -> {f['size_mb']:.1f} MB   ({t['size_reduction']:.1f}x smaller)\")\nprint(f\"precision : {f['precision']}\")\nprint(\"NOTE: latency in this run is Kaggle-CPU latency, not your device. Measure on the target: compresskit bench model.onnx --input-shape 1 3 224 224\")\n\nimport zipfile\nwith zipfile.ZipFile(f\"{OUT}/densenet121_cifar10_compressed.zip\", \"w\", zipfile.ZIP_DEFLATED) as z:\n    for name in (\"model.onnx\", \"report.html\", \"results.json\"):\n        z.write(f\"{OUT}/{name}\", name)\nprint(\"bundle:\", f\"{OUT}/densenet121_cifar10_compressed.zip\", f\"({os.path.getsize(f'{OUT}/densenet121_cifar10_compressed.zip')/1e6:.1f} MB)\")\n\nif WORK == \"/content\":\n    from google.colab import files\n    files.download(f\"{OUT}/densenet121_cifar10_compressed.zip\")"
+    },
+    {
+     "type": "markdown",
+     "source": "## 5 \u00b7 On your Mac (real speed check, once)\n\n```bash\nunzip densenet121_cifar10_compressed.zip\ncompresskit bench model.onnx --input-shape 1 3 224 224\n```"
+    }
+   ]
+  },
+  {
+   "slug": "convnext-tiny-cifar10",
+   "title": "ConvNeXt-Tiny on CIFAR-10",
+   "path": "kaggle/new/convnext_tiny_cifar10_compression.ipynb",
+   "blurb": "A modern convolutional-network compression recipe. No completed run is included in the website results yet.",
+   "cells": [
+    {
+     "type": "markdown",
+     "source": "# Compress ConvNeXt-Tiny (109 MB, 28 M parameters) on CIFAR-10 \u2014 Kaggle or Colab notebook (Member 3)\n\n`ImageNet-pretrained ConvNeXt-Tiny  \u2192  new 10-class head, fine-tuned on CIFAR-10  \u2192  gradual prune + fine-tune  \u2192  INT8  \u2192  ONNX  \u2192  verify`\n\n**Why this model is hard to compress:** a modern CNN: 7x7 depthwise convolutions, LayerNorm and GELU instead of BatchNorm and ReLU. Both pruning and INT8 are less forgiving here than on classic ResNets.\n**What to watch:** No BatchNorm, depthwise convs and LayerNorm: INT8 quantization of ConvNeXt is known to lose more accuracy than ResNet-style nets.\n\nCIFAR-10 images are upscaled 32\u2192224 so the network keeps its real size; upscaling adds no detail, it only makes the model big.\n\n**Kaggle \u2014 before Run All** (right panel): *Accelerator \u2192 GPU T4*, *Internet \u2192 On* (downloads the pretrained weights),\nand *Add Input \u2192 CIFAR-10* in the python-pickle format (it must contain a `cifar-10-batches-py` folder). Without it the notebook\ndownloads CIFAR-10 itself, which took about 50 minutes on a slow Kaggle link before.\n\n**Colab \u2014 before Run All:** *Runtime \u2192 Change runtime type \u2192 T4 GPU*. There is no \"Add Input\", so CIFAR-10 always downloads (170 MB).\nAt the end the zip is offered as a browser download. The notebook detects which platform it is on by itself.\n\nBatch size, mixed precision (fp16) and the GPU placement of every step are automatic; if a GPU run still reports\n\"out of GPU memory\", set `BATCH` to a smaller number. A pruned checkpoint is saved after every step under `work/`.\n\nTime: the 224\u00d7224 training passes dominate. Expect hours, not minutes, on a T4; lower `TRAIN_EPOCHS` / `STEPS` to shorten it\n(Kaggle sessions stop after 12 h). Accuracy is scored on a fixed 2000-image slice of the test set, so differences under about 1 pp are noise.\n\nEverything lands in `/kaggle/working/` \u2014 download `convnext_tiny_cifar10_compressed.zip` from the *Output* tab (Kaggle) or the browser download prompt (Colab)."
+    },
+    {
+     "type": "code",
+     "source": "# ======================= CONFIG =======================\nARCH         = \"tv:convnext_tiny\"  # any torchvision ImageNet model: tv:resnet152, tv:densenet121, tv:convnext_tiny, tv:efficientnet_b0, ...\nTRAIN_EPOCHS = 2      # fine-tune the pretrained model on CIFAR-10 (the \"original\" we compress)\nPRUNE_RATIO  = 0.5    # fraction of channels removed (0.5 -> ~75% fewer parameters)\nSTEPS        = 3      # gradual pruning steps\nFT_EPOCHS    = 1      # fine-tune epochs after every step\nLOSS         = \"dkd\"  # \"kd\" | \"dkd\"\nBATCH        = \"auto\"   # \"auto\" probes the GPU for the largest batch that fits and accumulates up to 64\nCRITERION    = \"taylor\"  # channel importance: \"taylor\" (loss-aware, GPU) | \"magnitude\" (fast)\nPROTECT      = 2        # prune the 2 most quantization-sensitive layers at half the ratio (0 = off)\nCALIB        = 256    # calibration images for INT8 (train split)\nTEST_IMAGES  = 2000   # test images used to score every stage\n# ======================================================"
+    },
+    {
+     "type": "code",
+     "source": "import os, subprocess, sys, json, shutil, pathlib\nIN_COLAB = \"COLAB_RELEASE_TAG\" in os.environ or os.path.exists(\"/content\")\nWORK = \"/content\" if IN_COLAB and not os.path.exists(\"/kaggle/working\") else \"/kaggle/working\"\nprint(\"platform:\", \"Colab\" if WORK == \"/content\" else \"Kaggle\", \"| working dir:\", WORK)\nREPO = \"https://github.com/Bhagyesh0603/Model-Compression-ToolKit..git\"\nif not os.path.exists(f\"{WORK}/ck\"):\n    subprocess.run([\"git\", \"clone\", \"-q\", REPO, f\"{WORK}/ck\"], check=True)\nos.chdir(f\"{WORK}/ck\")\n# --no-deps: never let pip swap the GPU build of torch that the platform ships; install only what is missing.\nsubprocess.run([sys.executable, \"-m\", \"pip\", \"install\", \"-q\", \"--no-deps\", \"-e\", \".\"], check=True)\nsubprocess.run([sys.executable, \"-m\", \"pip\", \"install\", \"-q\", \"torch-pruning>=1.5,<2.0\", \"onnx>=1.16\", \"onnxruntime>=1.19\", \"matplotlib\"], check=True)\n\nimport torch\n\nsmi = subprocess.run([\"nvidia-smi\", \"-L\"], capture_output=True, text=True) if shutil.which(\"nvidia-smi\") else None\nprint(\"nvidia-smi:\", smi.stdout.strip() if smi is not None and smi.returncode == 0 else \"no NVIDIA GPU visible to this session\")\nprint(\"GPU:\", torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"NONE -> training would take days on CPU; enable a GPU (Kaggle: right panel; Colab: Runtime > Change runtime type), then Restart & Run All\")\nfrom compresskit.zoo.data import resolve_root\nprint(\"CIFAR-10 location:\", resolve_root(), \"(attached dataset if under /kaggle/input, else it will download)\")\n\ndef run(*args):\n    args = [str(a) for a in args]\n    print(\"$\", \" \".join(args), flush=True)\n    return subprocess.run(args).returncode\n\nDATA = [\"--dataset\", \"cifar10-upscaled\", \"--input-size\", \"224\", \"--test-samples\", str(TEST_IMAGES)]"
+    },
+    {
+     "type": "markdown",
+     "source": "## 1 \u00b7 The original: pretrained ConvNeXt-Tiny with a CIFAR-10 head, fine-tuned"
+    },
+    {
+     "type": "code",
+     "source": "CKPT = \"checkpoints/convnext_tiny_cifar10.pt\"\nassert run(sys.executable, \"-m\", \"compresskit.cli\", \"train\", \"--arch\", ARCH, *DATA,\n           \"--epochs\", TRAIN_EPOCHS, \"--lr\", \"0.003\", \"--batch-size\", BATCH, \"--out\", CKPT) == 0, \"training failed - read the log above\""
+    },
+    {
+     "type": "markdown",
+     "source": "## 2 \u00b7 Compress: gradual prune + fine-tune \u2192 INT8 \u2192 evaluate the .onnx"
+    },
+    {
+     "type": "code",
+     "source": "OUT = WORK\ncode_ = run(sys.executable, \"-m\", \"compresskit.cli\", \"pipeline\", \"--model\", CKPT, *DATA,\n            \"--calib\", CALIB, \"--batch-size\", BATCH,\n            \"--criterion\", CRITERION, \"--protect-sensitive\", PROTECT,\n            \"--prune\", PRUNE_RATIO, \"--steps\", STEPS, \"--fine-tune-epochs\", FT_EPOCHS, \"--loss\", LOSS,\n            \"--precision\", \"int8\", \"--allow-slow-int8\",\n            \"--workdir\", f\"{OUT}/work\", \"--report\", f\"{OUT}/report.html\", \"--json\", f\"{OUT}/results.json\")\nassert code_ == 0, \"pipeline failed - read the log above\""
+    },
+    {
+     "type": "markdown",
+     "source": "## 3 \u00b7 Does the compressed model actually work? (original vs ONNX on real test images)"
+    },
+    {
+     "type": "code",
+     "source": "r = json.load(open(f\"{OUT}/results.json\"))\nshutil.copy(r[\"stages\"][-1][\"artifact\"], f\"{OUT}/model.onnx\")\nrun(sys.executable, \"experiments/verify_onnx.py\", \"--model\", CKPT, \"--onnx\", f\"{OUT}/model.onnx\",\n    \"--dataset\", \"cifar10-upscaled\", \"--input-size\", \"224\", \"--images\", 1000)"
+    },
+    {
+     "type": "markdown",
+     "source": "## 4 \u00b7 Summary and download bundle"
+    },
+    {
+     "type": "code",
+     "source": "b, f, t = r[\"baseline\"], r[\"stages\"][-1], r[\"totals\"]\nprint(f\"parameters: {b['parameters']:,} -> {f['parameters']:,}\")\nprint(f\"accuracy  : {b['accuracy']*100:.2f}% -> {f['accuracy']*100:.2f}%   (drop {t['accuracy_drop_pp']:.2f} pp, on {TEST_IMAGES} test images)\")\nprint(f\"size      : {b['size_mb']:.1f} MB -> {f['size_mb']:.1f} MB   ({t['size_reduction']:.1f}x smaller)\")\nprint(f\"precision : {f['precision']}\")\nprint(\"NOTE: latency in this run is Kaggle-CPU latency, not your device. Measure on the target: compresskit bench model.onnx --input-shape 1 3 224 224\")\n\nimport zipfile\nwith zipfile.ZipFile(f\"{OUT}/convnext_tiny_cifar10_compressed.zip\", \"w\", zipfile.ZIP_DEFLATED) as z:\n    for name in (\"model.onnx\", \"report.html\", \"results.json\"):\n        z.write(f\"{OUT}/{name}\", name)\nprint(\"bundle:\", f\"{OUT}/convnext_tiny_cifar10_compressed.zip\", f\"({os.path.getsize(f'{OUT}/convnext_tiny_cifar10_compressed.zip')/1e6:.1f} MB)\")\n\nif WORK == \"/content\":\n    from google.colab import files\n    files.download(f\"{OUT}/convnext_tiny_cifar10_compressed.zip\")"
+    },
+    {
+     "type": "markdown",
+     "source": "## 5 \u00b7 On your Mac (real speed check, once)\n\n```bash\nunzip convnext_tiny_cifar10_compressed.zip\ncompresskit bench model.onnx --input-shape 1 3 224 224\n```"
+    }
+   ]
   }
  ]
 }

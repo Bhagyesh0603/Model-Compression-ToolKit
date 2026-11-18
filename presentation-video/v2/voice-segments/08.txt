@@ -1,0 +1,1 @@
+If rounding causes too much accuracy loss, quantization aware training simulates that error while the model is still trainable. The weights adapt before the final low precision model is exported.

@@ -168,8 +168,8 @@ async function ModelBody({ params }: { params: Promise<{ slug: string }> }) {
             <div>
               <h3 className="text-[20px] tracking-[-0.02em]">Out of every 100 photos</h3>
               <p className="mt-2 max-w-[46ch] text-[15px] leading-[1.65] text-(--muted)">
-                Each dot is one photo. Filled dots are photos the model labels correctly; hollow dots are mistakes. Rounded to
-                whole photos.
+                These illustrative dots show the accuracy rate per 100 photos, not individual recorded predictions. Filled dots
+                represent correct labels and hollow dots represent mistakes, rounded to whole photos.
               </p>
             </div>
             <DotGrid correct={outOf100(b.accuracy)} label="Original model" />
@@ -183,7 +183,7 @@ async function ModelBody({ params }: { params: Promise<{ slug: string }> }) {
       <Section
         id="steps"
         title="What we did, step by step"
-        lede={<p>Three steps, always in this order. After each one the model is measured again, so you can see what each step saved and what it cost.</p>}
+        lede={<p>This recorded run has three reported compression stages. After each one the model is measured again, so you can see what each step saved and what it cost.</p>}
       >
         <ol className="grid gap-4 lg:grid-cols-3">
           {STEP_GUIDE.map((step, i) => {

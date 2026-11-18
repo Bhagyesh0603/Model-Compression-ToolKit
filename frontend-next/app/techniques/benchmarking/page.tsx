@@ -13,7 +13,7 @@ export default function BenchmarkingPage() {
   return (
     <TechniqueShell
       slug="benchmarking"
-      title="Every number is measured on the exported file"
+      title="Deployment metrics come from the exported file"
       lede={
         <p>
           The most common way to publish a fake speedup is to time two precisions under different settings, or to
@@ -25,10 +25,10 @@ export default function BenchmarkingPage() {
         title="The measurement protocol"
         lede={
           <p>
-            Every stage is exported to ONNX and timed through the identical ONNX Runtime session: one intra-op thread,
+            The default measurement setup exports each stage to ONNX and uses one intra-op thread,
             batch size 1, full graph optimization, 50 warm-up runs and then 200 timed runs. The median is the headline
             and the 95th percentile shows the tail. Accuracy is top-1 on the held-out test split, evaluated on the
-            exported file.
+            exported file. Search trials can use smaller subsets and fewer timed runs; imported runs retain their recorded settings.
           </p>
         }
       />
@@ -67,11 +67,11 @@ export default function BenchmarkingPage() {
         </div>
       </Section>
 
-      <Section title="Where it was measured">
+      <Section title="Recorded detailed CPU probes">
         <ul className="grid gap-4 md:grid-cols-2">
           {hosts.map((h) => (
             <li key={h.label} className="rounded-2xl bg-(--chip) p-5">
-              <p className="text-[12px] text-(--muted)">{h.label}</p>
+              <p className="text-[12px] text-(--muted)">{h.label === 'this machine' ? 'Recorded local CPU' : h.label}</p>
               <p className="mt-1 text-[19px] tracking-[-0.02em]">{h.cpu}</p>
               <p className="mt-2 text-[13px] text-(--muted)">
                 {h.logical_cores} logical cores, INT8 kernels: {h.int8_speed}

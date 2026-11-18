@@ -4,9 +4,10 @@ import { INTRO_SKIP_SCRIPT } from "@/src/landing/introScript";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://model-compression-tool-kit-hydw.vercel.app"),
   title: "compresskit — measured CNN compression",
   description:
-    "Structured pruning, distillation and INT8 quantization for image-classification CNNs, with every number measured on the exported ONNX file.",
+    "Structured pruning, distillation and INT8 quantization for image-classification CNNs, with deployment accuracy, latency and size measured on exported ONNX files.",
 };
 
 export default function RootLayout({

@@ -17,12 +17,12 @@ export default function QuantizationPage() {
   return (
     <TechniqueShell
       slug="quantization"
-      title="Quantization runs last, and only where it is fast"
+      title="Quantization runs last, with hardware-aware precision"
       lede={
         <p>
-          Quantization stores weights as 8-bit integers. That shrinks the file about fourfold, and on a CPU with fused
-          integer dot-product instructions it also runs faster. It changes the weight type, so it is the one step that
-          cannot be followed by pruning or by gradient training.
+          INT8 quantization uses 8-bit integers for supported weights and operations. At the same weight count, raw
+          weight storage is about four times smaller than FP32; total file size varies. Suitable CPU instructions
+          can accelerate execution, but only benchmarking confirms the speedup. Final quantization follows pruning and training.
         </p>
       }
     >
@@ -31,8 +31,8 @@ export default function QuantizationPage() {
         lede={
           <p>
             Weights are quantized per output channel: each channel gets its own scale, so a channel of small weights is
-            not forced onto the grid of the largest filter in the layer. Every weight then snaps to the nearest of 255
-            steps, which bounds its error to half a step.
+            not forced onto the grid of the largest filter in the layer. Weights round to levels on an integer grid. For values within the calibrated range, rounding error is at most
+            half a step; clipping outside that range can cause larger error.
           </p>
         }
       >
@@ -59,7 +59,7 @@ export default function QuantizationPage() {
       </Section>
 
       <Section tone="dark"
-        title="INT8 is only built where it pays"
+        title="Automatic precision uses the CPU probe"
         lede={
           <p>
             The toolkit probes the CPU for fused INT8 instructions (VNNI, AMX, dot-product, i8mm). Without them INT8 can
@@ -68,11 +68,11 @@ export default function QuantizationPage() {
           </p>
         }
       >
-        <Figure caption="The two machines the figures on this site were measured on. A speedup on one says nothing about the other.">
+        <Figure caption="Detailed CPU probes recorded for two hosts. Other measured hosts are identified in the model results; speedups are specific to each host.">
           <div className="grid gap-4 md:grid-cols-2">
             {hosts.map((h) => (
               <div key={h.label} className="rounded-2xl bg-(--chip) p-5">
-                <p className="text-[12px] text-(--muted)">{h.label}</p>
+                <p className="text-[12px] text-(--muted)">{h.label === 'this machine' ? 'Recorded local CPU' : h.label}</p>
                 <p className="mt-1 text-[19px] tracking-[-0.02em]">{h.cpu}</p>
                 <p className="mt-3 flex flex-wrap gap-1.5 font-mono text-[11px]">
                   {h.features.map((f) => (
@@ -101,7 +101,7 @@ export default function QuantizationPage() {
           </p>
         }
       >
-        <Figure caption="Pruned FP32 (the stage just before quantization) to INT8. The Kaggle CPU has no fast INT8 kernels, so its INT8 latency is not what an INT8-capable CPU would show.">
+        <Figure caption="Pruned FP32 (the stage just before quantization) to INT8. The Kaggle probe reports no fast INT8 instruction support. Its measured latency still describes that CPU and must not be extrapolated to another host.">
           <table className="figures-tab w-full text-left text-[14px]">
             <thead className="text-[12px] text-(--muted)">
               <tr>

@@ -26,7 +26,7 @@ export default function RecalibrationPage() {
         lede={
           <p>
             Recalibration resets every BatchNorm layer&apos;s running statistics, switches the momentum to a cumulative
-            average so the result is the exact mean over everything it sees, and runs forward passes over calibration
+            average of batch statistics, and runs forward passes over calibration
             data. There is no backpropagation and no weight changes. The data comes from the training split only, because
             these statistics are fitted to whatever they are shown.
           </p>
@@ -49,8 +49,8 @@ export default function RecalibrationPage() {
         title="What it buys, honestly"
         lede={
           <p>
-            Recalibration is cheap and always worth doing before measuring a pruned network, but on a cut this large it
-            does not restore the model. Fine-tuning does the real recovery, which is why the pipeline does both.
+            Recalibration is a relatively inexpensive recovery option, but this recorded cut shows that it does not
+            restore the model by itself. Additional fine-tuning may help; neither step guarantees recovery.
           </p>
         }
       >

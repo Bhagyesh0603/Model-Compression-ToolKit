@@ -1,0 +1,1 @@
+Here’s how CompressKit makes an AI model smaller and faster, while measuring the accuracy it gives up. We start with a trained image classifier.

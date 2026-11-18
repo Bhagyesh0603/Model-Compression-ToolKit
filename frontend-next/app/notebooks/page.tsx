@@ -13,11 +13,12 @@ export default function NotebooksPage() {
       <Wrap className="pb-10 pt-16 sm:pt-24">
         <p className="label-xs">Notebooks</p>
         <h1 className="mt-4 max-w-[18ch] text-balance text-[clamp(36px,4.8vw,66px)] font-normal leading-[1.03] tracking-[-0.045em]">
-          Run all, on a free GPU
+          Compression and validation notebooks
         </h1>
         <p className="mt-6 max-w-[60ch] text-[17px] leading-[1.65] text-(--muted)">
-          Two Kaggle notebooks run the whole flow top to bottom. The cell listings below are read from the notebook files
-          in the repository, so they match what you will run.
+          Browse {notebooks.length} repository notebooks, including full compression workflows and GPU validation.
+          Cell listings are copied from the notebook sources. A recipe is not proof of a completed benchmark;
+          measured results are listed separately on the model pages.
         </p>
       </Wrap>
       <Wrap className="pb-24">

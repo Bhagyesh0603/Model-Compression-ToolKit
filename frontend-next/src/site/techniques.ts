@@ -6,7 +6,7 @@ export const TECHNIQUES = [
   { slug: 'distillation', label: 'Distillation', short: 'The original model as teacher' },
   { slug: 'quantization', label: 'Quantization', short: 'INT8, FP16 and QAT' },
   { slug: 'sensitivity', label: 'Sensitivity', short: 'Which layers quantization hurts most' },
-  { slug: 'search', label: 'Budget search', short: 'State a budget, find the least compression' },
+  { slug: 'search', label: 'Budget search', short: 'State a budget, search measured configurations' },
   { slug: 'benchmarking', label: 'Benchmarking', short: 'How every number is measured' },
 ] as const;
 

@@ -37,8 +37,7 @@ const STEPS: ScrollyStep[] = [
     body: (
       <p>
         Structured pruning deletes whole channels, so the matrices really shrink. {STATS.steps} cuts of the
-        {' '}{pct(STATS.ratio_requested, 0)} target, each followed by fine-tuning. Accuracy drops at every cut and
-        comes back after the fine-tune.
+        {' '}{pct(STATS.ratio_requested, 0)} target, each followed by fine-tuning. The recorded curve shows the accuracy after each cut and its following fine-tune; recovery is not guaranteed.
       </p>
     ),
   },
@@ -58,11 +57,10 @@ const STEPS: ScrollyStep[] = [
   {
     id: 'quantize',
     kicker: 'Quantize',
-    title: 'INT8 comes last, because it cannot be undone.',
+    title: 'Final quantization comes after training.',
     body: (
       <p>
-        Integer weights cannot be pruned or trained further, so quantization is the final step. Here {OPS} of {OPS}{' '}
-        compute operators received an INT8 kernel. On a CPU without fast integer instructions the toolkit defaults to
+        This pipeline performs structural changes and weight training before creating the quantized deployment artifact. The report counts {OPS} quantized compute operators. On a CPU without fast integer instructions the toolkit defaults to
         FP16 instead.
       </p>
     ),
@@ -74,7 +72,7 @@ const STEPS: ScrollyStep[] = [
     body: (
       <p>
         The compressed .onnx is tested next to the original on {count(verify.images)} real test images. It works and is
-        close, but it is not identical, and the gap matches what the pipeline reported.
+        not identical. This separate subset check uses fewer images than the full pipeline evaluation, so its accuracy gap can differ.
       </p>
     ),
   },

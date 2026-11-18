@@ -18,6 +18,6 @@ export const HONESTY_RULES = [
   },
   {
     title: 'FP16 is a size win',
-    body: 'On the CPU provider FP16 is cast back to float32 to compute. It is labelled a size win, not a speed win, because that is what it measures as.',
+    body: 'The toolkit treats FP16 as a storage option on its CPU execution path, not a promised speedup. Actual latency is measured on the exported artifact.',
   },
 ] as const;

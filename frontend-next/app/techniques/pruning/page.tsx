@@ -31,8 +31,7 @@ export default function PruningPage() {
       title="Structured pruning removes whole channels"
       lede={
         <p>
-          Zeroing single weights leaves every tensor the same size, and no maintained CPU runtime turns that sparsity
-          into speed. Removing a channel shrinks the actual matrix multiply, which is where CPU latency comes from.
+          Zeroing single weights leaves tensor dimensions unchanged; exploiting that sparsity requires suitable sparse kernels. Removing a channel shrinks the actual matrix multiply, which is where CPU latency comes from.
         </p>
       }
     >
@@ -42,7 +41,7 @@ export default function PruningPage() {
           <p>
             One recorded run: {m.name} on {m.dataset}, asking for {pct(ps.ratio_requested, 0)} of channels in {ps.steps}{' '}
             steps. Parameters went from {count(ps.params_before)} to {count(ps.params_after)}. A channel is a whole
-            filter, so removing half the channels in a layer removes about three quarters of that layer&apos;s weights.
+            filter, so halving both input and output channel counts removes about three quarters of a dense convolution&apos;s weights. Halving only one dimension removes about half.
           </p>
         }
       >

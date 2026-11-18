@@ -1,0 +1,79 @@
+[
+  {
+    "scene": 1,
+    "start_seconds": 0,
+    "end_seconds": 11,
+    "title": "A MODEL, TRANSFORMED",
+    "narration": "Here\u2019s how CompressKit makes an AI model smaller and faster, while measuring the accuracy it gives up. We start with a trained image classifier."
+  },
+  {
+    "scene": 2,
+    "start_seconds": 11,
+    "end_seconds": 30,
+    "title": "FROM PIXELS TO PREDICTION",
+    "narration": "An image enters the network as numbers. Convolution filters scan small regions, detecting patterns such as edges. Deeper layers combine patterns into useful features. The final classifier produces class scores. The highest score becomes the prediction."
+  },
+  {
+    "scene": 3,
+    "start_seconds": 30,
+    "end_seconds": 44,
+    "title": "MEASURE THE ORIGINAL",
+    "narration": "Before compression, we preserve the original model and measure its accuracy, latency, and file size. We also check the CPU, because lower precision is only useful for speed when the hardware and runtime support it."
+  },
+  {
+    "scene": 4,
+    "start_seconds": 44,
+    "end_seconds": 62,
+    "title": "REMOVE CHANNELS, NOT JUST VALUES",
+    "narration": "First, structured pruning. A channel represents a learned feature map. We remove selected channels and update the connected layers together. The tensors become smaller, so the network requires less computation. Simply replacing individual weights with zeros would not shrink those dimensions."
+  },
+  {
+    "scene": 5,
+    "start_seconds": 62,
+    "end_seconds": 77,
+    "title": "CUT. RECOVER. REPEAT.",
+    "narration": "Removing too much at once can damage accuracy. Instead, we can prune gradually and fine tune between cuts. Batch normalization recalibration updates the changed network\u2019s activation statistics. These recovery steps can help, but they cannot guarantee the original accuracy."
+  },
+  {
+    "scene": 6,
+    "start_seconds": 77,
+    "end_seconds": 94,
+    "title": "LET THE TEACHER GUIDE THE STUDENT",
+    "narration": "Next, knowledge distillation. The untouched original model becomes the teacher. The smaller model is the student. The student learns from correct labels and the teacher\u2019s class scores, helping it recover useful behavior. Only the student is needed for deployment."
+  },
+  {
+    "scene": 7,
+    "start_seconds": 94,
+    "end_seconds": 112,
+    "title": "THE SAME WEIGHTS. FEWER BITS.",
+    "narration": "Quantization reduces numerical precision. Thirty two bit floating point values are mapped to eight bit integers using calibrated scales. For the same weight count, raw weight storage can become about four times smaller. The complete file reduction varies, and some operations may stay in floating point."
+  },
+  {
+    "scene": 8,
+    "start_seconds": 112,
+    "end_seconds": 125,
+    "title": "LEARN TO TOLERATE ROUNDING",
+    "narration": "If rounding causes too much accuracy loss, quantization aware training simulates that error while the model is still trainable. The weights adapt before the final low precision model is exported."
+  },
+  {
+    "scene": 9,
+    "start_seconds": 125,
+    "end_seconds": 146,
+    "title": "THE AUTOMATIC DECISION LOOP",
+    "narration": "You can choose the stages manually, or give the toolkit a budget. Automatic search tries quantization first. If only accuracy fails, it can protect sensitive layers and try recovery. If latency or size fails, it explores pruning. Every candidate is measured. It stops when a configuration meets the requirements, if one is found."
+  },
+  {
+    "scene": 10,
+    "start_seconds": 146,
+    "end_seconds": 166,
+    "title": "PROOF FROM A RECORDED RUN",
+    "narration": "Here is one recorded result for ResNet fifty six on CIFAR ten. The model shrank from three point two eight to zero point five three megabytes, and inference became two point two five times faster. Accuracy changed from ninety three point one eight to ninety point five zero percent."
+  },
+  {
+    "scene": 11,
+    "start_seconds": 166,
+    "end_seconds": 178,
+    "title": "DEPLOY THE COMPRESSED MODEL",
+    "narration": "The final output is an ONNX model, with reports showing exactly what changed. A new image passes through the compressed network and produces a prediction. Less storage. Faster measured inference. An explicit accuracy trade off."
+  }
+]

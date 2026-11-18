@@ -55,7 +55,7 @@ python experiments/verify_onnx.py --model checkpoints/resnet20_fp32.pt --onnx <f
         title="Your own data and model"
         lede={
           <p>
-            Datasets are CIFAR-10, the Human Action Recognition set, or any image folder with one sub-directory per
+            Datasets include CIFAR-10, ImageNet-style folders, the Human Action Recognition set, or any image folder with one sub-directory per
             class. A checkpoint must be one the toolkit saved, because compressed models store the whole module.
           </p>
         }
@@ -70,7 +70,7 @@ compresskit pipeline --model checkpoints/har_resnet18_fp32.pt --dataset folder \
         lede={
           <ul className="list-disc space-y-1.5 pl-5">
             <li>PyTorch image-classification models only. No TensorFlow, and no detection or segmentation models.</li>
-            <li>Tested on ResNet and VGG-style networks. Depthwise or grouped convolutions (MobileNet-style) are untested for pruning.</li>
+            <li>Recorded website benchmarks cover ResNet and VGG-style networks. Additional DenseNet and ConvNeXt recipes are available, but do not yet have recorded results here.</li>
             <li>The model must export to ONNX, since every final measurement is made on that file.</li>
             <li>Latency from a cloud CPU describes that CPU. Measure on your target with compresskit bench.</li>
           </ul>

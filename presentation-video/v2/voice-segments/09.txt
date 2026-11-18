@@ -1,0 +1,1 @@
+You can choose the stages manually, or give the toolkit a budget. Automatic search tries quantization first. If only accuracy fails, it can protect sensitive layers and try recovery. If latency or size fails, it explores pruning. Every candidate is measured. It stops when a configuration meets the requirements, if one is found.

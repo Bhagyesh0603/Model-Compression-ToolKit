@@ -42,7 +42,7 @@ async function NotebookBody({ params }: { params: Promise<{ slug: string }> }) {
             >
               View the notebook file
             </a>
-            <span className="inline-flex h-11 items-center font-mono text-[12px] text-(--muted)">{n.path}</span>
+            <span className="inline-flex min-h-11 items-center break-all font-mono text-[12px] text-(--muted)">{n.path}</span>
           </p>
         </Wrap>
       </Band>
@@ -53,7 +53,7 @@ async function NotebookBody({ params }: { params: Promise<{ slug: string }> }) {
           <ol className="list-decimal space-y-1.5 pl-5">
             <li>On Kaggle choose Create, New Notebook, then File, Import Notebook, and upload the file.</li>
             <li>In the right panel set the accelerator to a GPU and Internet to On.</li>
-            <li>Edit the config cell if you want different settings, then Run All.</li>
+            <li>Attach any dataset required by the notebook, review its setup and config cells, then Run All.</li>
             <li>Download the files from the Output tab.</li>
           </ol>
         }

@@ -11,8 +11,9 @@ export const metadata: Metadata = { title: 'The pipeline — compresskit' };
 
 const STAGES = [
   ['Prune', 'Remove channels through the dependency graph, widths aligned for SIMD.', '/techniques/pruning'],
-  ['Recover', 'Re-estimate BatchNorm statistics, then fine-tune against the original as teacher.', '/techniques/recalibration'],
+  ['Recover', 'Re-estimate BatchNorm statistics with forward passes; no weight training.', '/techniques/recalibration'],
   ['Distill', 'Optional extra distillation epochs once the architecture is final.', '/techniques/distillation'],
+  ['QAT', 'Optionally train with simulated rounding error before final quantization.', '/techniques/quantization'],
   ['Quantize', 'INT8 where the CPU has fast INT8, FP16 where it does not. Always last.', '/techniques/quantization'],
   ['Verify', 'Export to ONNX and measure accuracy and latency on that file.', '/techniques/benchmarking'],
 ] as const;
@@ -25,21 +26,22 @@ export default function PipelinePage() {
         <Wrap className="pb-16 pt-24 sm:pb-20 sm:pt-32">
           <p className="label-xs">Pipeline</p>
           <h1 className="mt-4 max-w-[18ch] text-balance text-[clamp(36px,4.8vw,66px)] font-normal leading-[1.03] tracking-[-0.05em]">
-            Five stages in a fixed order
+            Choose the stages your model needs
           </h1>
           <p className="mt-6 max-w-[60ch] text-[17px] leading-[1.65] text-(--muted)">
-            Every stage exports an ONNX file and is measured, so the result is a table of real numbers per stage rather
+            The stages below show a typical manual workflow, not a mandatory sequence. QAT and distillation are optional.
+            Every executed compression stage exports an ONNX file and is measured, so the result is a table of real numbers rather
             than one number out of a black box. If latency got worse, you can see which stage did it.
           </p>
         </Wrap>
       </Band>
 
       <Section title="The stages">
-        <ol className="grid gap-px overflow-hidden rounded-[22px] border border-(--line) bg-(--line) md:grid-cols-5">
+        <ol className="grid gap-px overflow-hidden rounded-[22px] border border-(--line) bg-(--line) md:grid-cols-3">
           {STAGES.map(([name, body, href], i) => (
             <li key={name} className="bg-(--bg)">
               <Link href={href} className="block h-full p-5 transition-colors hover:bg-(--hover)">
-                <p className="text-[12px] text-(--muted)">Stage {i + 1}</p>
+                <p className="text-[12px] text-(--muted)">{i + 1}. {name === 'Verify' ? 'Measurement' : 'Compression option'}</p>
                 <p className="mt-1 text-[19px] tracking-[-0.02em]">{name}</p>
                 <p className="mt-2 text-[13px] leading-snug text-(--muted)">{body}</p>
               </Link>
@@ -52,18 +54,18 @@ export default function PipelinePage() {
         title="Why quantization is last"
         lede={
           <p>
-            Quantization changes the weight type from float to integer. After that, structural pruning no longer
-            applies and gradient-based fine-tuning is blocked. The pipeline refuses a plan where quantize is not the
+            Final quantization produces a deployment artifact rather than a trainable PyTorch model. In this toolkit,
+            structural pruning and gradient-based recovery must happen before that export. The pipeline refuses a plan where quantize is not the
             final stage, instead of reordering it silently.
           </p>
         }
       />
 
       <Section
-        title="Two recorded runs, stage by stage"
+        title={`${runs.length} recorded models, stage by stage`}
         lede={
           <p>
-            The same pipeline on two different networks and two different machines. The ratio always appears next to
+            Recorded compression runs on different networks and machines. The ratio always appears next to
             the accuracy it cost.
           </p>
         }

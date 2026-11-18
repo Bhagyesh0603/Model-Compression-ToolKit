@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import notebookData from '../../src/data/notebooks.json';
 
 const ROUTES = [
   '/',
@@ -18,7 +19,7 @@ const ROUTES = [
   '/models/resnet56',
   '/models/vgg16-bn',
   '/notebooks',
-  '/notebooks/compresskit-end-to-end',
+  ...notebookData.notebooks.map((n) => `/notebooks/${n.slug}`),
   '/run',
   '/this-route-does-not-exist',
 ];
@@ -56,7 +57,7 @@ for (const vp of VIEWPORTS) {
         const { pageErrors, consoleErrors } = watch(page);
         const res = await page.goto(route, { waitUntil: 'load' });
         expect(res, 'navigation response').not.toBeNull();
-        expect(res!.status(), 'HTTP status').toBeLessThan(500);
+        expect(res!.status(), 'HTTP status').toBe(route === '/this-route-does-not-exist' ? 404 : 200);
         // Let hydration and client effects run so late errors are caught.
         await page.waitForTimeout(1500);
 

@@ -250,6 +250,18 @@ NOTEBOOKS = [
      "One notebook for any supported model: train a baseline if needed, prune, fine-tune, quantize, evaluate, report."),
     ("resnet56", "ResNet-56", "kaggle/resnet56_compression.ipynb",
      "ResNet-56 on CIFAR-10 with a bundled baseline checkpoint, plus a check of the ONNX file against the original."),
+    ("vgg16-cifar10", "VGG-16-BN on CIFAR-10", "kaggle/vgg16_cifar10_compression.ipynb",
+     "Fine-tune an ImageNet-pretrained VGG-16-BN on CIFAR-10, then compress and evaluate it. Recipe availability does not imply a recorded result for this exact configuration."),
+    ("vgg16-imagenet", "VGG-16-BN on ImageNet", "kaggle/vgg16_imagenet_compression.ipynb",
+     "Compress pretrained VGG-16-BN using ImageNet data. Requires the dataset described in the notebook; no result for this recipe is claimed here."),
+    ("gpu-validation", "GPU validation", "kaggle/gpu_validation.ipynb",
+     "Check CUDA support and exercise a short compression workflow. This is a validation recipe, not a full accuracy benchmark."),
+    ("resnet152-cifar10", "ResNet-152 on CIFAR-10", "kaggle/new/resnet152_cifar10_compression.ipynb",
+     "A larger residual-network compression recipe. No completed run is included in the website results yet."),
+    ("densenet121-cifar10", "DenseNet-121 on CIFAR-10", "kaggle/new/densenet121_cifar10_compression.ipynb",
+     "A dense-connectivity compression recipe. No completed run is included in the website results yet."),
+    ("convnext-tiny-cifar10", "ConvNeXt-Tiny on CIFAR-10", "kaggle/new/convnext_tiny_cifar10_compression.ipynb",
+     "A modern convolutional-network compression recipe. No completed run is included in the website results yet."),
 ]
 
 

@@ -11,28 +11,29 @@ const LADDER = [
   ['Quantize only', 'No retraining. Often enough.'],
   ['Mixed precision', 'Keep the most sensitive layers in FP32, when accuracy is the only gap and the host has fast INT8.'],
   ['Quantization-aware training', 'A short recovery pass, when accuracy is the only gap.'],
-  ['Prune', 'Binary-search the ratio against the latency or size budget, protecting fragile layers.'],
-  ['Distill', 'Recover the accuracy the pruning cost.'],
+  ['Prune when needed', 'Explore pruning ratios only when latency or size fails, protecting fragile layers.'],
+  ['Distill when needed', 'Recover accuracy with or without pruning; accuracy-only failures can skip pruning.'],
 ] as const;
 
 export default function SearchPage() {
   return (
     <TechniqueShell
       slug="search"
-      title="State a budget, get the least compression that meets it"
+      title="State a budget, search for a measured fit"
       lede={
         <p>
           You write what you need, for example <span className="font-mono text-[15px]">accuracy_drop&lt;1%,size&lt;5mb</span>.
           The search starts with the cheapest option and escalates only when it falls short, and stops at the first
-          configuration that fits.
+          configuration that fits. This is a bounded search, not a guarantee of the globally smallest change.
+          Here accuracy_drop&lt;1% means a drop of one percentage point.
         </p>
       }
     >
       <Section
-        title="The ladder"
+        title="Conditional search stages"
         lede={
           <p>
-            Stopping early is the point. A pipeline that always runs every stage spends hours fine-tuning to solve a
+            These are conditional branches, not steps that every run executes. Pruning is skipped when only accuracy fails. Stopping early is the point. A pipeline that always runs every stage spends hours fine-tuning to solve a
             problem quantization had already solved, and gives back accuracy it never needed to lose.
           </p>
         }
@@ -52,7 +53,7 @@ export default function SearchPage() {
         title="Three recorded searches"
         lede={
           <p>
-            Same ResNet-20, three budgets. One is met by quantization alone, one needs the whole ladder, and one
+            Same ResNet-20, three budgets. One is met by quantization alone, one needs pruning and recovery, and one
             cannot be met, in which case the search returns the best trade-off it actually measured rather than a
             number it didn&apos;t.
           </p>

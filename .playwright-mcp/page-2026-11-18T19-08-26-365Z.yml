@@ -1,0 +1,294 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e2]:
+    - banner [ref=f1e3]:
+      - generic [ref=f1e4]:
+        - link "compresskit" [ref=f1e5] [cursor=pointer]:
+          - /url: /
+        - navigation "Pages" [ref=f1e12]:
+          - link "Pipeline" [ref=f1e13] [cursor=pointer]:
+            - /url: /#pipeline
+          - link "Techniques" [ref=f1e15] [cursor=pointer]:
+            - /url: /techniques
+          - link "Explore" [ref=f1e16] [cursor=pointer]:
+            - /url: /explore
+          - link "Models" [ref=f1e17] [cursor=pointer]:
+            - /url: /models
+          - link "Notebooks" [ref=f1e18] [cursor=pointer]:
+            - /url: /notebooks
+        - generic [ref=f1e19]:
+          - link "Source on GitHub" [ref=f1e20] [cursor=pointer]:
+            - /url: https://github.com/Bhagyesh0603/Model-Compression-ToolKit.
+          - link "Run it yourself" [ref=f1e25] [cursor=pointer]:
+            - /url: /run
+    - main [ref=f1e30]:
+      - generic [ref=f1e32]:
+        - paragraph [ref=f1e33]: Pipeline
+        - heading "Choose the stages your model needs" [level=1] [ref=f1e34]
+        - paragraph [ref=f1e35]: The stages below show a typical manual workflow, not a mandatory sequence. QAT and distillation are optional. Every executed compression stage exports an ONNX file and is measured, so the result is a table of real numbers rather than one number out of a black box. If latency got worse, you can see which stage did it.
+      - generic [ref=f1e37]:
+        - heading "The stages" [level=2] [ref=f1e40]
+        - list [ref=f1e42]:
+          - listitem [ref=f1e43]:
+            - link [ref=f1e44] [cursor=pointer]:
+              - /url: /techniques/pruning
+              - paragraph [ref=f1e45]: 1. Compression option
+              - paragraph [ref=f1e46]: Prune
+              - paragraph [ref=f1e47]: Remove channels through the dependency graph, widths aligned for SIMD.
+          - listitem [ref=f1e48]:
+            - link [ref=f1e49] [cursor=pointer]:
+              - /url: /techniques/recalibration
+              - paragraph [ref=f1e50]: 2. Compression option
+              - paragraph [ref=f1e51]: Recover
+              - paragraph [ref=f1e52]: Re-estimate BatchNorm statistics with forward passes; no weight training.
+          - listitem [ref=f1e53]:
+            - link [ref=f1e54] [cursor=pointer]:
+              - /url: /techniques/distillation
+              - paragraph [ref=f1e55]: 3. Compression option
+              - paragraph [ref=f1e56]: Distill
+              - paragraph [ref=f1e57]: Optional extra distillation epochs once the architecture is final.
+          - listitem [ref=f1e58]:
+            - link [ref=f1e59] [cursor=pointer]:
+              - /url: /techniques/quantization
+              - paragraph [ref=f1e60]: 4. Compression option
+              - paragraph [ref=f1e61]: QAT
+              - paragraph [ref=f1e62]: Optionally train with simulated rounding error before final quantization.
+          - listitem [ref=f1e63]:
+            - link [ref=f1e64] [cursor=pointer]:
+              - /url: /techniques/quantization
+              - paragraph [ref=f1e65]: 5. Compression option
+              - paragraph [ref=f1e66]: Quantize
+              - paragraph [ref=f1e67]: INT8 where the CPU has fast INT8, FP16 where it does not. Always last.
+          - listitem [ref=f1e68]:
+            - link [ref=f1e69] [cursor=pointer]:
+              - /url: /techniques/benchmarking
+              - paragraph [ref=f1e70]: 6. Measurement
+              - paragraph [ref=f1e71]: Verify
+              - paragraph [ref=f1e72]: Export to ONNX and measure accuracy and latency on that file.
+      - generic [ref=f1e76]:
+        - heading "Why quantization is last" [level=2] [ref=f1e77]
+        - paragraph [ref=f1e79]: Final quantization produces a deployment artifact rather than a trainable PyTorch model. In this toolkit, structural pruning and gradient-based recovery must happen before that export. The pipeline refuses a plan where quantize is not the final stage, instead of reordering it silently.
+      - generic [ref=f1e81]:
+        - generic [ref=f1e83]:
+          - heading "3 recorded models, stage by stage" [level=2] [ref=f1e84]
+          - paragraph [ref=f1e86]: Recorded compression runs on different networks and machines. The ratio always appears next to the accuracy it cost.
+        - generic [ref=f1e88]:
+          - 'figure "ResNet-20 on CIFAR-10: 9.1x smaller (1.05 MB to 0.11 MB) at a cost of 7.54 points of top-1; 3.2x faster on Apple M5. Schedule: prune 0.5 channels, 3 steps x 2 DKD fine-tune epochs, INT8." [ref=f1e89]':
+            - generic [ref=f1e90]:
+              - generic [ref=f1e91]:
+                - table [ref=f1e92]:
+                  - rowgroup [ref=f1e93]:
+                    - row [ref=f1e94]:
+                      - columnheader "Stage" [ref=f1e95]
+                      - columnheader "Prec." [ref=f1e96]
+                      - columnheader "Top-1" [ref=f1e97]
+                      - columnheader "Latency" [ref=f1e98]
+                      - columnheader "Size" [ref=f1e99]
+                  - rowgroup [ref=f1e100]:
+                    - row [ref=f1e101]:
+                      - cell "baseline" [ref=f1e102]
+                      - cell "fp32" [ref=f1e103]
+                      - cell "91.54%" [ref=f1e104]
+                      - cell "1.45 ms" [ref=f1e105]
+                      - cell "1.05 MB" [ref=f1e106]
+                    - row [ref=f1e107]:
+                      - cell "1_prune" [ref=f1e108]
+                      - cell "fp32" [ref=f1e109]
+                      - cell "83.97%" [ref=f1e110]
+                      - cell "0.649 ms" [ref=f1e111]
+                      - cell "0.27 MB" [ref=f1e112]
+                    - row [ref=f1e113]:
+                      - cell "2_recover" [ref=f1e114]
+                      - cell "fp32" [ref=f1e115]
+                      - cell "83.97%" [ref=f1e116]
+                      - cell "0.671 ms" [ref=f1e117]
+                      - cell "0.27 MB" [ref=f1e118]
+                    - row [ref=f1e119]:
+                      - cell "3_quantize" [ref=f1e120]
+                      - cell "int8" [ref=f1e121]
+                      - cell "84.00%" [ref=f1e122]
+                      - cell "0.460 ms" [ref=f1e123]
+                      - cell "0.11 MB" [ref=f1e124]
+                - img "Accuracy against median latency for each stage" [ref=f1e125]:
+                  - generic [ref=f1e126]: 81%
+                  - generic [ref=f1e128]: 87%
+                  - generic [ref=f1e130]: 93%
+                  - generic [ref=f1e133]: baseline
+                  - generic [ref=f1e136]: 1_prune
+                  - generic [ref=f1e139]: 2_recover
+                  - generic [ref=f1e142]: 3_quantize
+                  - generic [ref=f1e145]: median latency (ms), marker area is file size
+                  - generic [ref=f1e146]: "0"
+                  - generic [ref=f1e147]: "1.57"
+              - paragraph [ref=f1e148]:
+                - generic [ref=f1e149]: measured
+                - generic [ref=f1e150]: Apple M5
+                - generic [aria-hidden] [ref=f1e151]: ·
+                - generic [ref=f1e152]: local run
+                - generic [aria-hidden] [ref=f1e153]: ·
+                - generic [ref=f1e154]: artifacts/demo/results.json
+                - generic [ref=f1e155]: Apple M5, fast INT8
+          - 'figure "ResNet-56 on CIFAR-10: 6.2x smaller (3.28 MB to 0.53 MB) at a cost of 2.68 points of top-1; 2.3x faster on 11th Gen Intel(R) Core(TM) i5-11320H @ 3.20GHz. Schedule: 5 gradual pruning steps, then INT8; half the channels cut in the early layers, a quarter in the last stage." [ref=f1e157]':
+            - generic [ref=f1e158]:
+              - generic [ref=f1e159]:
+                - table [ref=f1e160]:
+                  - rowgroup [ref=f1e161]:
+                    - row [ref=f1e162]:
+                      - columnheader "Stage" [ref=f1e163]
+                      - columnheader "Prec." [ref=f1e164]
+                      - columnheader "Top-1" [ref=f1e165]
+                      - columnheader "Latency" [ref=f1e166]
+                      - columnheader "Size" [ref=f1e167]
+                  - rowgroup [ref=f1e168]:
+                    - row [ref=f1e169]:
+                      - cell "baseline" [ref=f1e170]
+                      - cell "fp32" [ref=f1e171]
+                      - cell "93.18%" [ref=f1e172]
+                      - cell "1.89 ms" [ref=f1e173]
+                      - cell "3.28 MB" [ref=f1e174]
+                    - row [ref=f1e175]:
+                      - cell "1_prune" [ref=f1e176]
+                      - cell "fp32" [ref=f1e177]
+                      - cell "90.42%" [ref=f1e178]
+                      - cell "1.07 ms" [ref=f1e179]
+                      - cell "1.60 MB" [ref=f1e180]
+                    - row [ref=f1e181]:
+                      - cell "2_recover" [ref=f1e182]
+                      - cell "fp32" [ref=f1e183]
+                      - cell "90.42%" [ref=f1e184]
+                      - cell "1.08 ms" [ref=f1e185]
+                      - cell "1.60 MB" [ref=f1e186]
+                    - row [ref=f1e187]:
+                      - cell "3_quantize" [ref=f1e188]
+                      - cell "int8" [ref=f1e189]
+                      - cell "90.50%" [ref=f1e190]
+                      - cell "0.842 ms" [ref=f1e191]
+                      - cell "0.53 MB" [ref=f1e192]
+                - img "Accuracy against median latency for each stage" [ref=f1e193]:
+                  - generic [ref=f1e194]: 88%
+                  - generic [ref=f1e196]: 92%
+                  - generic [ref=f1e198]: 95%
+                  - generic [ref=f1e201]: baseline
+                  - generic [ref=f1e204]: 1_prune
+                  - generic [ref=f1e207]: 2_recover
+                  - generic [ref=f1e210]: 3_quantize
+                  - generic [ref=f1e213]: median latency (ms), marker area is file size
+                  - generic [ref=f1e214]: "0"
+                  - generic [ref=f1e215]: "2.04"
+              - paragraph [ref=f1e216]:
+                - generic [ref=f1e217]: measured
+                - generic [ref=f1e218]: 11th Gen Intel(R) Core(TM) i5-11320H @ 3.20GHz
+                - generic [aria-hidden] [ref=f1e219]: ·
+                - generic [ref=f1e220]: compresskit HTML report
+                - generic [aria-hidden] [ref=f1e221]: ·
+                - generic [ref=f1e222]: resnet56_report.html
+                - generic [ref=f1e223]: fast INT8 (AVX-512 VNNI); fine-tune length is not printed in the report
+          - 'figure "VGG-16-BN on CIFAR-10: 15.7x smaller (56.2 MB to 3.57 MB) at a cost of 3.02 points of top-1; 8.0x faster on Intel(R) Xeon(R) CPU @ 2.00GHz. Schedule: prune 0.5 channels, 5 steps x 5 DKD fine-tune epochs, INT8." [ref=f1e225]':
+            - generic [ref=f1e226]:
+              - generic [ref=f1e227]:
+                - table [ref=f1e228]:
+                  - rowgroup [ref=f1e229]:
+                    - row [ref=f1e230]:
+                      - columnheader "Stage" [ref=f1e231]
+                      - columnheader "Prec." [ref=f1e232]
+                      - columnheader "Top-1" [ref=f1e233]
+                      - columnheader "Latency" [ref=f1e234]
+                      - columnheader "Size" [ref=f1e235]
+                  - rowgroup [ref=f1e236]:
+                    - row [ref=f1e237]:
+                      - cell "baseline" [ref=f1e238]
+                      - cell "fp32" [ref=f1e239]
+                      - cell "93.20%" [ref=f1e240]
+                      - cell "9.04 ms" [ref=f1e241]
+                      - cell "56.2 MB" [ref=f1e242]
+                    - row [ref=f1e243]:
+                      - cell "1_prune" [ref=f1e244]
+                      - cell "fp32" [ref=f1e245]
+                      - cell "90.25%" [ref=f1e246]
+                      - cell "2.00 ms" [ref=f1e247]
+                      - cell "14.1 MB" [ref=f1e248]
+                    - row [ref=f1e249]:
+                      - cell "2_recover" [ref=f1e250]
+                      - cell "fp32" [ref=f1e251]
+                      - cell "90.25%" [ref=f1e252]
+                      - cell "1.86 ms" [ref=f1e253]
+                      - cell "14.1 MB" [ref=f1e254]
+                    - row [ref=f1e255]:
+                      - cell "3_quantize" [ref=f1e256]
+                      - cell "int8" [ref=f1e257]
+                      - cell "90.18%" [ref=f1e258]
+                      - cell "1.13 ms" [ref=f1e259]
+                      - cell "3.57 MB" [ref=f1e260]
+                - img "Accuracy against median latency for each stage" [ref=f1e261]:
+                  - generic [ref=f1e262]: 88%
+                  - generic [ref=f1e264]: 92%
+                  - generic [ref=f1e266]: 95%
+                  - generic [ref=f1e269]: baseline
+                  - generic [ref=f1e272]: 1_prune
+                  - generic [ref=f1e275]: 2_recover
+                  - generic [ref=f1e278]: 3_quantize
+                  - generic [ref=f1e281]: median latency (ms), marker area is file size
+                  - generic [ref=f1e282]: "0"
+                  - generic [ref=f1e283]: "9.77"
+              - paragraph [ref=f1e284]:
+                - generic [ref=f1e285]: transcribed
+                - generic [ref=f1e286]: Kaggle (Intel Xeon @ 2.00GHz)
+                - generic [aria-hidden] [ref=f1e287]: ·
+                - generic [ref=f1e288]: Kaggle notebook log
+                - generic [aria-hidden] [ref=f1e289]: ·
+                - generic [ref=f1e290]: tools/transcribed_vgg16.json
+                - generic [ref=f1e291]: typed in from the run's printed log; latency is Kaggle-CPU latency, not an INT8-capable device
+    - contentinfo [ref=f1e293]:
+      - generic [ref=f1e294]:
+        - generic [ref=f1e295]:
+          - link "compresskit" [ref=f1e296] [cursor=pointer]:
+            - /url: /
+          - paragraph [ref=f1e303]: Pruning, distillation and quantization for image-classification CNNs, measured on the exported ONNX file.
+        - navigation "Techniques" [ref=f1e304]:
+          - paragraph [ref=f1e305]: Techniques
+          - list [ref=f1e306]:
+            - listitem [ref=f1e307]:
+              - link "Structured pruning" [ref=f1e308] [cursor=pointer]:
+                - /url: /techniques/pruning
+            - listitem [ref=f1e309]:
+              - link "Gradual pruning" [ref=f1e310] [cursor=pointer]:
+                - /url: /techniques/gradual
+            - listitem [ref=f1e311]:
+              - link "BatchNorm recalibration" [ref=f1e312] [cursor=pointer]:
+                - /url: /techniques/recalibration
+            - listitem [ref=f1e313]:
+              - link "Distillation" [ref=f1e314] [cursor=pointer]:
+                - /url: /techniques/distillation
+            - listitem [ref=f1e315]:
+              - link "Quantization" [ref=f1e316] [cursor=pointer]:
+                - /url: /techniques/quantization
+            - listitem [ref=f1e317]:
+              - link "Sensitivity" [ref=f1e318] [cursor=pointer]:
+                - /url: /techniques/sensitivity
+            - listitem [ref=f1e319]:
+              - link "Budget search" [ref=f1e320] [cursor=pointer]:
+                - /url: /techniques/search
+            - listitem [ref=f1e321]:
+              - link "Benchmarking" [ref=f1e322] [cursor=pointer]:
+                - /url: /techniques/benchmarking
+        - navigation "Explore" [ref=f1e323]:
+          - paragraph [ref=f1e324]: Explore
+          - list [ref=f1e325]:
+            - listitem [ref=f1e326]:
+              - link "The pipeline" [ref=f1e327] [cursor=pointer]:
+                - /url: /pipeline
+            - listitem [ref=f1e328]:
+              - link "Compressed models" [ref=f1e329] [cursor=pointer]:
+                - /url: /models
+            - listitem [ref=f1e330]:
+              - link "Notebooks" [ref=f1e331] [cursor=pointer]:
+                - /url: /notebooks
+            - listitem [ref=f1e332]:
+              - link "Run it" [ref=f1e333] [cursor=pointer]:
+                - /url: /run
+        - generic [ref=f1e334]:
+          - paragraph [ref=f1e335]: Where the numbers come from. Each page names its source run, the machine it ran on, and whether the figures were measured by the toolkit or transcribed from a log.
+          - paragraph [ref=f1e336]: Latency is a statement about the CPU that measured it. Check it on your target with compresskit bench.
+      - generic [ref=f1e337]:
+        - paragraph [ref=f1e338]: compresskit
+        - paragraph [ref=f1e339]: MIT licensed per pyproject.toml
+  - alert [ref=f1e340]

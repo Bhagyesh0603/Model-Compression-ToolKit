@@ -1,0 +1,1 @@
+First, structured pruning. A channel represents a learned feature map. We remove selected channels and update the connected layers together. The tensors become smaller, so the network requires less computation. Simply replacing individual weights with zeros would not shrink those dimensions.
