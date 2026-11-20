@@ -130,7 +130,20 @@ def load_model(path: str | Path) -> tuple[nn.Module, dict]:
     """Load a checkpoint written by `save_model`.
 
     `weights_only=False` is required because the pickle holds the module object
-    itself. Only load checkpoints you produced — this executes pickled code.
+    itself. Only load checkpoints you produced or trust — this executes pickled code.
+
+    Also accepts a plain `torch.save(model, path)` of a whole module, so a model
+    trained outside compresskit can be compressed by pointing `--model` at it.
+    A bare state_dict is rejected: weights alone carry no architecture to load into.
     """
     payload = torch.load(str(path), map_location="cpu", weights_only=False)
-    return payload["model"].eval(), payload.get("meta", {})
+    if isinstance(payload, nn.Module):
+        return payload.eval(), {}
+    if isinstance(payload, dict) and isinstance(payload.get("model"), nn.Module):
+        return payload["model"].eval(), payload.get("meta", {})
+    if isinstance(payload, dict) and payload and all(isinstance(v, torch.Tensor) for v in payload.values()):
+        raise ValueError(
+            f"{path} holds only weights (a state_dict), not a model. Load it into your model class and "
+            f"save the whole module instead: torch.save(model, '{Path(path).stem}_full.pt')"
+        )
+    raise ValueError(f"{path} is not a PyTorch model checkpoint (got {type(payload).__name__})")

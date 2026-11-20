@@ -356,7 +356,7 @@ def build_parser() -> argparse.ArgumentParser:
                                                           "images (default 2000, 0 = all)")
 
     def add_model_args(sub, calib_default=512):
-        sub.add_argument("--model", help="checkpoint from `compresskit train`")
+        sub.add_argument("--model", help="path to your model: a `compresskit train` checkpoint or any torch.save(model, path) file")
         sub.add_argument("--arch", default="resnet20",
                          help="architecture if no --model (resnet20/56/18, vgg16_bn, har_resnet18, "
                               "or tv:<name> for any torchvision ImageNet model, e.g. tv:vgg16_bn)")

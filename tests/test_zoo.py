@@ -20,3 +20,34 @@ def test_cifar_default_root_resolves_to_the_repo_root_data_dir():
 
 def test_har_default_root_resolves_to_the_repo_root_data_dir():
     assert har.DEFAULT_ROOT == REPO_ROOT / "data" / "har" / "Human Action Recognition"
+
+
+# --- bring-your-own-model checkpoints -----------------------------------------
+import pytest
+import torch
+import torch.nn as nn
+
+from compresskit.zoo.train import load_model, save_model
+
+
+def _tiny():
+    return nn.Sequential(nn.Conv2d(3, 4, 3), nn.ReLU(), nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Linear(4, 10))
+
+
+def test_load_model_reads_compresskit_checkpoints(tmp_path):
+    save_model(_tiny(), tmp_path / "ck.pt", {"arch": "tiny", "accuracy": 0.5})
+    model, meta = load_model(tmp_path / "ck.pt")
+    assert isinstance(model, nn.Module) and meta["arch"] == "tiny"
+
+
+def test_load_model_accepts_a_plain_torch_save_of_a_whole_model(tmp_path):
+    torch.save(_tiny(), tmp_path / "plain.pt")
+    model, meta = load_model(tmp_path / "plain.pt")
+    assert isinstance(model, nn.Module) and not model.training
+    assert meta == {}
+
+
+def test_load_model_explains_that_a_state_dict_alone_is_not_enough(tmp_path):
+    torch.save(_tiny().state_dict(), tmp_path / "weights.pt")
+    with pytest.raises(ValueError, match="state_dict"):
+        load_model(tmp_path / "weights.pt")
