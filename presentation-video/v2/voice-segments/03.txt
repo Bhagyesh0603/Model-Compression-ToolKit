@@ -1,1 +1,0 @@
-Before compression, we preserve the original model and measure its accuracy, latency, and file size. We also check the CPU, because lower precision is only useful for speed when the hardware and runtime support it.

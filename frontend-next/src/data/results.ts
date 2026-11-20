@@ -3,7 +3,7 @@
  *
  * Nothing on the site states a measurement that isn't read from here. The JSON
  * files are generated, not edited by hand (the one hand-typed source is
- * tools/transcribed_vgg16.json, and its records say so in `provenance.kind`).
+ * runs/vgg16_kaggle_transcribed.json, and its records say so in `provenance.kind`).
  */
 import modelsJson from './models.json';
 import hostsJson from './hosts.json';

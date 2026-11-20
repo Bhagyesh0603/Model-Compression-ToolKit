@@ -174,47 +174,61 @@ These are enforced in code, not just documented:
 ## Project layout
 
 ```
-compresskit/
-  core/              cross-cutting infra every technique depends on
-    host.py            CPU/ISA probe, INT8 gating, training device
-    export.py          torch -> ONNX, and ONNX-node <-> torch-layer naming
-    benchmark.py        the measurement harness (latency, accuracy, size, host context)
-  pruning/            TECHNIQUE: structured channel pruning
-    prune.py            Torch-Pruning DepGraph wrapper: L1 magnitude, SIMD alignment
-    recover.py           batch-norm re-estimation
-    latency_guide.py      per-group ranking by measured latency impact, not FLOPs
-  quantization/        TECHNIQUE: INT8/FP16 quantization
-    quantize.py          ORT static INT8 / FP16, op-coverage reporting
-    qat.py                quantization-aware training fallback (STE fake-quant)
-  distillation/         TECHNIQUE: knowledge distillation
-    distill.py            KD and Decoupled-KD losses, teacher = original model
-  sensitivity/          TECHNIQUE: per-layer sensitivity analysis
-    analysis.py            per-layer one-at-a-time MSE / SQNR analysis
-  pipeline.py         staged orchestration, ordering enforcement
-  search.py           budget-driven search with early exit
-  report.py           before/after tables, Pareto plot, sensitivity chart
-  cli.py              command line interface
-  zoo/                project-specific reference material, not the general API
-    models.py           CIFAR ResNet-20/56, VGG-16-BN
-    data.py             CIFAR-10 loaders with train / calibration / test role separation
-    train.py            baseline training, checkpoint I/O
-    har.py              human-action-recognition dataset/model support
-    datasets.py         cifar10 / har / any image-folder behind one interface
-experiments/
-  train_baseline.py  train ResNet-56 / VGG-16-BN on CIFAR-10 (MPS)
-  run_sweep.py       ratio x precision sweep -> CSV + Pareto report
-  demo.ipynb         one image, original vs compressed, side by side
-kaggle/
-  compresskit_end_to_end.ipynb   the one-notebook workflow
-tests/
+compresskit/               the toolkit (the only thing `pip install` ships)
+  core/                      cross-cutting infra every technique depends on
+    host.py                    CPU/ISA probe, INT8 gating, training device
+    export.py                  torch -> ONNX, and ONNX-node <-> torch-layer naming
+    benchmark.py               the measurement harness (latency, accuracy, size, host context)
+    amp.py                     CUDA mixed-precision helpers (no-op on cpu/mps)
+    memory.py                  largest-batch-that-fits probe for GPU training
+  pruning/                   TECHNIQUE: structured channel pruning
+    prune.py                   Torch-Pruning DepGraph wrapper: L1 magnitude, SIMD alignment
+    recover.py                 batch-norm re-estimation
+    latency_guide.py           per-group ranking by measured latency impact, not FLOPs
+  quantization/              TECHNIQUE: INT8/FP16 quantization
+    quantize.py                ORT static INT8 / FP16, op-coverage reporting
+    qat.py                     quantization-aware training fallback (STE fake-quant)
+  distillation/              TECHNIQUE: knowledge distillation
+    distill.py                 KD and Decoupled-KD losses, teacher = original model
+  sensitivity/               TECHNIQUE: per-layer sensitivity analysis
+    analysis.py                per-layer one-at-a-time MSE / SQNR analysis
+  pipeline.py                staged orchestration, ordering enforcement
+  search.py                  budget-driven search with early exit
+  report.py                  before/after tables, Pareto plot, sensitivity chart
+  cli.py                     command line interface
+  zoo/                       reference models and datasets, not the general API
+    models.py                  CIFAR ResNet-20/56, VGG-16-BN
+    torchvision_models.py      any torchvision classifier as --arch tv:<name>
+    data.py                    CIFAR-10 loaders with train / calibration / test role separation
+    datasets.py                cifar10 / har / any image-folder behind one interface
+    har.py                     human-action-recognition dataset/model support
+    train.py                   baseline training, checkpoint I/O
+tests/                     pytest suite
+experiments/               scripts that use the toolkit (not part of it)
+  train_baseline.py          train ResNet-56 / VGG-16-BN on CIFAR-10
+  run_sweep.py               ratio x precision sweep -> CSV + Pareto report
+  verify_onnx.py             run a compressed .onnx next to the original model
+  demo.ipynb                 one image, original vs compressed, side by side
+  har/                       ResNet-18 human-action-recognition experiment
+kaggle/                    GPU notebooks (compresskit_end_to_end.ipynb is the main flow)
+  new/                       larger-model recipes, not yet run to completion
+runs/                      recorded evidence from real runs: HTML reports, notebook log, training logs
+tools/                     site-data export and run import (runs/ -> frontend-next/src/data)
+frontend-next/             the project website; every number comes from src/data/*.json
+docs/                      workflow, demo script, architecture diagram, research notes,
+                           papers, B.Tech report and black book
 ```
+
+Generated and downloaded files stay out of git: `data/` (CIFAR-10), `artifacts/`
+(per-run ONNX files and results) and `checkpoints/`, except the two small
+baseline checkpoints `resnet20_fp32.pt` and `resnet56_fp32.pt`.
 
 ## Background
 
-- `Research_Survey.md` — synthesis of the 13-paper literature survey behind the
-  ordering and loss choices.
-- `architecture.png` — the system architecture diagram.
-- `archive/System_Design.md` — competitive analysis and the build-vs-wrap
+- `docs/research/Research_Survey.md` — synthesis of the 13-paper literature survey
+  (papers in `docs/papers/`) behind the ordering and loss choices.
+- `docs/architecture.png` — the system architecture diagram.
+- `docs/research/System_Design.md` — competitive analysis and the build-vs-wrap
   decisions.
 
 ## Tests

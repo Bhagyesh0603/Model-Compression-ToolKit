@@ -1,1 +1,0 @@
-Removing too much at once can damage accuracy. Instead, we can prune gradually and fine tune between cuts. Batch normalization recalibration updates the changed network’s activation statistics. These recovery steps can help, but they cannot guarantee the original accuracy.

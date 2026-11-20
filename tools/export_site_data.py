@@ -157,7 +157,7 @@ def export_models(args) -> None:
             other = condense(
                 rec, name="ResNet-20", arch="resnet20", dataset="CIFAR-10",
                 schedule="5 gradual pruning steps, then INT8; half the channels cut in the early layers, a quarter in the last stage",
-                source="resnet20_report.html",
+                source="runs/resnet20_intel_i5_report.html",
                 prov={"kind": "measured", "host": rec["host"]["cpu"], "machine": rec["host"]["machine"],
                       "date": rec["_source"]["generated"], "where": "compresskit HTML report",
                       "note": "fast INT8 (AVX-512 VNNI); fine-tune length is not printed in the report"},
@@ -187,7 +187,7 @@ def export_models(args) -> None:
         r56_runs.append((condense(
             rec, name="ResNet-56", arch="resnet56", dataset="CIFAR-10",
             schedule="5 gradual pruning steps, then INT8; half the channels cut in the early layers, a quarter in the last stage",
-            source="resnet56_report.html",
+            source="runs/resnet56_intel_i5_report.html",
             prov={"kind": "measured", "host": rec["host"]["cpu"], "machine": rec["host"]["machine"],
                   "date": rec["_source"]["generated"], "where": "compresskit HTML report",
                   "note": "fast INT8 (AVX-512 VNNI); fine-tune length is not printed in the report"},
@@ -196,7 +196,7 @@ def export_models(args) -> None:
         r56_runs.append((condense(
             rec, name="ResNet-56", arch="resnet56", dataset="CIFAR-10",
             schedule="prune 0.5 channels, 5 steps x 5 DKD fine-tune epochs, INT8",
-            source="resnet56-compression.ipynb",
+            source="runs/resnet56_kaggle_run.ipynb",
             prov={"kind": "measured", "host": f"Kaggle ({rec['host']['cpu']})", "machine": rec["host"]["machine"],
                   "where": "Kaggle notebook output, read by tools/import_runs.py",
                   "note": "no fast INT8 on this CPU, so its latency is not a deployment figure"},
@@ -217,11 +217,11 @@ def export_models(args) -> None:
             prov={"kind": "measured", "host": "Kaggle (Intel Xeon @ 2.00GHz)", "where": "Kaggle notebook",
                   "note": "latency is Kaggle-CPU latency, not an INT8-capable device"},
         ))
-    elif (ROOT / "tools" / "transcribed_vgg16.json").exists():
+    elif (ROOT / "runs" / "vgg16_kaggle_transcribed.json").exists():
         entries.append(condense(
-            json.loads((ROOT / "tools" / "transcribed_vgg16.json").read_text()), name="VGG-16-BN", arch="vgg16_bn",
+            json.loads((ROOT / "runs" / "vgg16_kaggle_transcribed.json").read_text()), name="VGG-16-BN", arch="vgg16_bn",
             dataset="CIFAR-10", schedule="prune 0.5 channels, 5 steps x 5 DKD fine-tune epochs, INT8",
-            source="tools/transcribed_vgg16.json",
+            source="runs/vgg16_kaggle_transcribed.json",
             prov={"kind": "transcribed", "host": "Kaggle (Intel Xeon @ 2.00GHz)", "where": "Kaggle notebook log",
                   "note": "typed in from the run's printed log; latency is Kaggle-CPU latency, not an INT8-capable device"},
         ))

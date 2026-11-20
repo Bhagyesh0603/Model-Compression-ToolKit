@@ -269,10 +269,10 @@ def notebook_text(path: Path) -> str:
 
 # --------------------------------------------------------------------------- main
 IMPORTS = [
-    ("resnet20_intel_i5", lambda: parse_report_html(ROOT / "resnet20_report.html")),
-    ("resnet56_intel_i5", lambda: parse_report_html(ROOT / "resnet56_report.html")),
-    ("resnet56_kaggle", lambda: parse_pipeline_log(notebook_text(ROOT / "resnet56-compression.ipynb"),
-                                                   source="resnet56-compression.ipynb")),
+    ("resnet20_intel_i5", lambda: parse_report_html(ROOT / "runs" / "resnet20_intel_i5_report.html")),
+    ("resnet56_intel_i5", lambda: parse_report_html(ROOT / "runs" / "resnet56_intel_i5_report.html")),
+    ("resnet56_kaggle", lambda: parse_pipeline_log(notebook_text(ROOT / "runs" / "resnet56_kaggle_run.ipynb"),
+                                                   source="runs/resnet56_kaggle_run.ipynb")),
 ]
 
 

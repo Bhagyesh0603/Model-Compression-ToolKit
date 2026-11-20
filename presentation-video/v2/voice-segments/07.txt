@@ -1,1 +1,0 @@
-Quantization reduces numerical precision. Thirty two bit floating point values are mapped to eight bit integers using calibrated scales. For the same weight count, raw weight storage can become about four times smaller. The complete file reduction varies, and some operations may stay in floating point.

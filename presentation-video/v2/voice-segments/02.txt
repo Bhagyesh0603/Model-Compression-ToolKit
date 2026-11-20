@@ -1,1 +1,0 @@
-An image enters the network as numbers. Convolution filters scan small regions, detecting patterns such as edges. Deeper layers combine patterns into useful features. The final classifier produces class scores. The highest score becomes the prediction.
