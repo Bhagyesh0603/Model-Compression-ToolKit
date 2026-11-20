@@ -68,7 +68,7 @@ export function SiteNav() {
 
         <div className="flex items-center gap-2">
           <Link
-            href="https://github.com/Bhagyesh0603/Model-Compression-ToolKit."
+            href="https://github.com/Bhagyesh0603/Model-Compression-ToolKit"
             aria-label="Source on GitHub"
             title="Source on GitHub"
             className="flex h-10 w-10 items-center justify-center rounded-full bg-(--chip) transition-colors hover:bg-(--chip-hover)"

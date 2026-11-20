@@ -31,7 +31,11 @@ of each to apply, and that tells you the truth about what you got:
 ## Install
 
 ```bash
-python3 -m venv .venv && ./.venv/bin/pip install -e .
+git clone https://github.com/Bhagyesh0603/Model-Compression-ToolKit.git
+cd Model-Compression-ToolKit
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
+compresskit probe          # check what this CPU can do
 ```
 
 ## Quickstart
