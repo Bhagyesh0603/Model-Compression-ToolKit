@@ -36,8 +36,8 @@ export default function RunPage() {
 
       <Section title="Locally, from the command line">
         <div className="space-y-5">
-          <Code label="Install">{`git clone https://github.com/Bhagyesh0603/Model-Compression-ToolKit..git
-cd Model-Compression-ToolKit.
+          <Code label="Install">{`git clone https://github.com/Bhagyesh0603/Model-Compression-ToolKit.git
+cd Model-Compression-ToolKit
 pip install -e .
 compresskit probe          # what this CPU can do, including whether INT8 is fast`}</Code>
           <Code label="Train a baseline (skipped if the checkpoint exists)">{`compresskit train --arch resnet20 --skip-if-exists`}</Code>

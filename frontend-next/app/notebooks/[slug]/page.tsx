@@ -8,7 +8,7 @@ import { Band } from '@/src/motion/Band';
 import { PageFrame } from '@/src/site/PageFrame';
 import { Section, Wrap } from '@/src/site/Section';
 
-const REPO_BLOB = 'https://github.com/Bhagyesh0603/Model-Compression-ToolKit./blob/master';
+const REPO_BLOB = 'https://github.com/Bhagyesh0603/Model-Compression-ToolKit/blob/master';
 
 export function generateStaticParams() {
   return notebooks.map((n) => ({ slug: n.slug }));
