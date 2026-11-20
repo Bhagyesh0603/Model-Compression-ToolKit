@@ -1,7 +1,7 @@
 """Human Action Recognition — a real fine-tuned model, not a CIFAR toy.
 
 Architecture is copied verbatim from
-`resnet18/resnet-18-on-human-action-recognition-dataset.ipynb` (torchvision
+`experiments/har/resnet18_har_training.ipynb` (torchvision
 resnet18, ImageNet stem, 224x224, 15-class head) so a state_dict trained there
 loads here with no shape mismatch. Unlike `models.py`/`data.py`, which the
 toolkit's own CIFAR baselines use, this is a *second* real-world subject to

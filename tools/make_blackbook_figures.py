@@ -1,4 +1,4 @@
-"""Figures for the B.Tech black book (blackbook/main.tex).
+"""Figures for the B.Tech black book (docs/blackbook/main.tex).
 
 Two kinds, and nothing else:
   * diagrams drawn from the toolkit's own structure (modules, dataclasses, stage order);
@@ -23,7 +23,7 @@ from matplotlib.patches import FancyBboxPatch  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "frontend-next" / "src" / "data"
-OUT = ROOT / "blackbook" / "figures"
+OUT = ROOT / "docs" / "blackbook" / "figures"
 OUT.mkdir(parents=True, exist_ok=True)
 
 INK, MUTED, RULE = "#1b1f1d", "#6b7570", "#c9cfcc"

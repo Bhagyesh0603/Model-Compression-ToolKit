@@ -1,1 +1,0 @@
-Here is one recorded result for ResNet fifty six on CIFAR ten. The model shrank from three point two eight to zero point five three megabytes, and inference became two point two five times faster. Accuracy changed from ninety three point one eight to ninety point five zero percent.

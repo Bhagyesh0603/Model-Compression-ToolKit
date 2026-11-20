@@ -1,1 +1,0 @@
-Next, knowledge distillation. The untouched original model becomes the teacher. The smaller model is the student. The student learns from correct labels and the teacher’s class scores, helping it recover useful behavior. Only the student is needed for deployment.

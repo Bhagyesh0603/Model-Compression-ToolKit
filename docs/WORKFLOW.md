@@ -29,7 +29,7 @@ Order rule: **train → prune + fine-tune → quantize**. Quantization always co
 because INT8 weights can no longer be pruned or trained.
 
 The toolkit already runs steps 4–5 as a single command (`compresskit pipeline` /
-`experiments/compress_har.py`). Nothing in this plan changes the compression engine.
+`experiments/har/compress_har.py`). Nothing in this plan changes the compression engine.
 
 ---
 
@@ -56,7 +56,7 @@ PRECISION   = "auto"           # int8 if the CPU supports it, else fp16
 | 3 | `pipeline` / `compress` work on any dataset and input size, write to `--workdir`, `--report`, `--json` | `cli.py` |
 | 4 | The notebook | `kaggle/compresskit_end_to_end.ipynb` |
 | 5 | Tests for the dataset registry, root resolution, and train → gradual prune → INT8 → report | `tests/test_workflow.py` |
-| 6 | Colab files moved to `archive/colab/`; README documents the single flow | `archive/`, `README.md` |
+| 6 | Colab files removed (stack is Kaggle-only); README documents the single flow | `README.md` |
 | 7 | Bring your own data (`--dataset folder`) or model (`MODEL_FILE`) | `zoo/datasets.py`, notebook config |
 | 8 | Detailed report: gradual pruning schedule, channels per layer, training curve, per-class accuracy | `report.py`, `pipeline.py` |
 | 9 | `MODE = "manual"` or `"auto"` (budget) in the notebook | notebook |
